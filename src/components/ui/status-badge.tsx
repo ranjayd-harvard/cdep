@@ -1,0 +1,24 @@
+import { Badge, type BadgeColor } from "./badge";
+
+const STATUS_MAP: Record<string, { label: string; color: BadgeColor }> = {
+  ACTIVE: { label: "Active", color: "green" },
+  COMPLETED: { label: "Completed", color: "green" },
+  DEPRECATED: { label: "Deprecated", color: "gray" },
+  REVOKED: { label: "Revoked", color: "red" },
+  EXPIRED: { label: "Expired", color: "gray" },
+  COMING_SOON: { label: "Coming Soon", color: "blue" },
+  RECEIVED: { label: "Received", color: "blue" },
+  VALIDATING: { label: "Validating", color: "yellow" },
+  PROCESSING: { label: "Processing", color: "yellow" },
+  UPLOADING: { label: "Uploading", color: "yellow" },
+  FAILED: { label: "Failed", color: "red" },
+  IDLE: { label: "Idle", color: "gray" },
+  active: { label: "Active", color: "green" },
+  inactive: { label: "Inactive", color: "gray" },
+  revoked: { label: "Revoked", color: "red" },
+};
+
+export function StatusBadge({ status }: { status: string }) {
+  const entry = STATUS_MAP[status] ?? { label: status, color: "gray" as BadgeColor };
+  return <Badge color={entry.color}>{entry.label}</Badge>;
+}

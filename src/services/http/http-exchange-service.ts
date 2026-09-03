@@ -1,0 +1,20 @@
+import type { Exchange } from "@/models";
+import type { ExchangeService } from "@/services/interfaces";
+import { httpGet } from "@/lib/http-client";
+
+/**
+ * Tenant identity is never sent over the wire — derived server-side from
+ * the session. No `/api/exchanges` route exists today: the Exchanges
+ * pages are Server Components reading `services.exchanges` directly, and
+ * nothing client-side mutates or re-fetches an Exchange, so these
+ * endpoints are unexercised (kept for interface/shape parity).
+ */
+export class HttpExchangeService implements ExchangeService {
+  getExchanges(_tenantId: string): Promise<Exchange[]> {
+    return httpGet<Exchange[]>(`/api/exchanges`);
+  }
+
+  getExchange(_tenantId: string, exchangeId: string): Promise<Exchange | null> {
+    return httpGet<Exchange | null>(`/api/exchanges/${encodeURIComponent(exchangeId)}`);
+  }
+}

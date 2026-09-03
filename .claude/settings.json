@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(git mv *)",
+      "Bash(npx vitest *)",
+      "Bash(npx eslint *)",
+      "Bash(lsof -i :3000 -sTCP:LISTEN)",
+      "Bash(mkdir -p \"src/app/api/uploads\" \"src/app/api/downloads/[fileId]/url\" \"src/app/api/downloads/[fileId]/file\" \"src/app/api/notifications/[notificationId]/read\" \"src/app/api/notifications/read-all\")",
+      "Bash(echo \"EXIT_CODE=$?\")",
+      "Bash(npm test *)",
+      "Bash(npx tsx *)",
+      "Bash(curl -s -o /tmp/resp1.txt -w \"HTTP %{http_code}\\\\n\" -X POST http://localhost:3000/api/uploads)",
+      "Read(//tmp/**)",
+      "Bash(curl -s -o /tmp/resp2.txt -w \"HTTP %{http_code}\\\\n\" http://localhost:3000/api/downloads/dl-fake/url)",
+      "Bash(curl -s -o /tmp/resp3.txt -w \"HTTP %{http_code}\\\\n\" http://localhost:3000/api/downloads/dl-fake/file)",
+      "Bash(curl -s -o /tmp/resp4.txt -w \"HTTP %{http_code}\\\\n\" -X POST http://localhost:3000/api/notifications/notif-fake/read)",
+      "Bash(grep -oE '\"dl-[a-f0-9]+\"' /tmp/downloads-page.html | sort -u | head -5)",
+      "Read(//private/tmp/**)",
+      "Bash(grep -o '.\\\\{80\\\\}smoke-upload.csv.\\\\{200\\\\}' /tmp/downloads-page.html | head -3)",
+      "Bash(grep -o '.\\\\{40\\\\}DownloadButton.\\\\{250\\\\}' /tmp/downloads-page.html | head -3 *)",
+      "Bash(echo \"TSC_EXIT=$?\")",
+      "Bash(npx playwright *)",
+      "Read(//Users/ranjay.kumar/Library/Caches/ms-playwright/**)",
+      "Read(//Users/ranjay.kumar/.cache/**)",
+      "Bash(npx -y -p playwright node playwright-upload-test.mjs)",
+      "Bash(npm init *)",
+      "Bash(npm install *)",
+      "Bash(node playwright-upload-test.mjs)",
+      "Bash(node playwright-followup-test.mjs)",
+      "Bash(npx tsx -e ' *)",
+      "Bash(docker exec *)",
+      "Bash(docker compose *)"
+    ],
+    "additionalDirectories": [
+      "/Users/ranjay.kumar/Documents/Ranjay/agentic-ai/react/cdep/src/app/api/downloads/[fileId]"
+    ]
+  }
+}
