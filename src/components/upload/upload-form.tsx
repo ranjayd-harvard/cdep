@@ -6,6 +6,7 @@ import { UploadCloud, FileText } from "lucide-react";
 import type { Dataset, UploadResult } from "@/models";
 import { UploadStatus } from "@/models";
 import { clientServices } from "@/services/client";
+import { toTenantContext } from "@/lib/client-tenant-context";
 import { Button, Select, Card, CardContent, StatusBadge } from "@/components/ui";
 import { formatBytes } from "@/lib/utils";
 import { ACCEPTED_UPLOAD_EXTENSIONS, MAX_UPLOAD_SIZE_BYTES, isAcceptedUploadFile } from "@/lib/upload-validation";
@@ -47,14 +48,15 @@ export function UploadForm({ datasets }: { datasets: Dataset[] }) {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!file || !datasetId || !session?.user?.tenantId) return;
+    const context = toTenantContext(session?.user);
+    if (!file || !datasetId || !context) return;
 
     setSubmitting(true);
     setValidationError(null);
 
     try {
       await clientServices.uploads.uploadFile(
-        session.user.tenantId,
+        context,
         file,
         { datasetId, filename: file.name, fileSize: file.size, fileType: file.type },
         (progress) => setResult(progress),

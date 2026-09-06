@@ -1,0 +1,10 @@
+{
+  "pipelineRunId": "run-snapshot-consistency-test",
+  "organizationId": "org-vobis-org-722aea",
+  "tenantId": "tenant-default-47d849",
+  "dataProductId": "event-performance",
+  "productVersion": "1.0",
+  "goldTable": "gold.event_performance",
+  "goldSnapshotId": "9139899140245559563",
+  "recordCount": 21
+}

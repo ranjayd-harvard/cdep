@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createFakeDb } from "@/test/fake-mongo";
+import { fakeTenantContext } from "@/test/fake-tenant-context";
 
 const { getDbMock } = vi.hoisted(() => ({ getDbMock: vi.fn() }));
 
@@ -27,7 +28,7 @@ describe("MongoExchangeService", () => {
     seed();
     const service = new MongoExchangeService();
 
-    const exchanges = await service.getExchanges(TENANT_A);
+    const exchanges = await service.getExchanges(fakeTenantContext(TENANT_A));
 
     expect(exchanges).toHaveLength(1);
     expect(exchanges[0]?.id).toBe("exch-a1");
@@ -37,7 +38,7 @@ describe("MongoExchangeService", () => {
     seed();
     const service = new MongoExchangeService();
 
-    const exchange = await service.getExchange(TENANT_A, "exch-b1");
+    const exchange = await service.getExchange(fakeTenantContext(TENANT_A), "exch-b1");
 
     expect(exchange).toBeNull();
   });
@@ -46,7 +47,7 @@ describe("MongoExchangeService", () => {
     seed();
     const service = new MongoExchangeService();
 
-    const exchange = await service.getExchange(TENANT_B, "exch-b1");
+    const exchange = await service.getExchange(fakeTenantContext(TENANT_B), "exch-b1");
 
     expect(exchange?.id).toBe("exch-b1");
   });

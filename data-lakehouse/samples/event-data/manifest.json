@@ -1,0 +1,33 @@
+{
+  "manifestVersion": "1.0",
+  "exchange": {
+    "exchangeId": "exc-example-001",
+    "direction": "INBOUND",
+    "status": "VALIDATED"
+  },
+  "ownership": {
+    "organizationId": "org-vobis-org-722aea",
+    "tenantId": "tenant-default-47d849"
+  },
+  "submittedBy": {
+    "userId": "usr-8a74b91"
+  },
+  "dataProduct": {
+    "dataProductId": "event-data",
+    "schemaVersion": "1.0"
+  },
+  "file": {
+    "originalFilename": "events.csv",
+    "contentType": "text/csv",
+    "format": "CSV",
+    "sizeBytes": 191,
+    "checksumAlgorithm": "SHA-256",
+    "checksum": "GENERATED_AT_STAGING_TIME_BY_create_sample_exchange.py"
+  },
+  "source": {
+    "channel": "CUSTOMER_PORTAL"
+  },
+  "timestamps": {
+    "receivedAt": "2026-09-05T00:00:00Z"
+  }
+}

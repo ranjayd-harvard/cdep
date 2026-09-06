@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   Building2,
   Users,
+  Layers,
   type LucideIcon,
 } from "lucide-react";
 
@@ -42,5 +43,6 @@ export const ADMIN_NAV: NavItem[] = [
   { label: "Overview", href: "/admin", icon: LayoutDashboard },
   { label: "Organizations", href: "/admin/organizations", icon: Building2 },
   { label: "Users", href: "/admin/users", icon: Users },
+  { label: "Lakehouse Ingestion", href: "/admin/lakehouse", icon: Layers },
   { label: "Platform Settings", href: "/admin/settings", icon: Settings },
 ];

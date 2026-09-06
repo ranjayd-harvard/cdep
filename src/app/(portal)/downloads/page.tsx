@@ -16,7 +16,7 @@ import { DownloadButton } from "./download-button";
 export default async function DownloadsPage() {
   const tenant = await requireTenantContext();
   const [downloads, datasets] = await Promise.all([
-    services.downloads.getDownloads(tenant.tenantId),
+    services.downloads.getDownloads(tenant),
     services.datasets.getDatasets(tenant.tenantId),
   ]);
 

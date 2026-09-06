@@ -3,13 +3,16 @@ import type {
   DataProductService,
   DatasetService,
   EntitlementService,
+  LakehouseAdminService,
   OrganizationInvitationService,
   OrganizationMembershipService,
   OrganizationService,
   PlatformSettingsService,
+  PublicationAdminService,
   TenantService,
 } from "@/services/interfaces";
 import type { ClientServiceRegistry } from "@/services/client";
+import { env } from "@/config/env";
 import {
   MongoApiAccessService,
   MongoDataProductService,
@@ -25,6 +28,13 @@ import {
   MongoTenantService,
   MongoUploadService,
 } from "@/services/mongo";
+import {
+  ExchangeApiDownloadService,
+  ExchangeApiExchangeService,
+  ExchangeApiUploadService,
+} from "@/services/exchange-api";
+import { LakehouseAdminApiService, UnavailableLakehouseAdminService } from "@/services/lakehouse-admin";
+import { PublicationAdminApiService, UnavailablePublicationAdminService } from "@/services/publication-admin";
 
 export interface ServiceRegistry extends ClientServiceRegistry {
   organizations: OrganizationService;
@@ -36,6 +46,8 @@ export interface ServiceRegistry extends ClientServiceRegistry {
   entitlements: EntitlementService;
   platformSettings: PlatformSettingsService;
   apiAccess: ApiAccessService;
+  lakehouseAdmin: LakehouseAdminService;
+  publicationAdmin: PublicationAdminService;
 }
 
 /**
@@ -67,6 +79,18 @@ export interface ServiceRegistry extends ClientServiceRegistry {
  * implementations depend on Node built-ins the browser bundle can't
  * resolve. A "use client" file should import `clientServices` from
  * `@/services/client` instead.
+ *
+ * `exchanges`/`downloads`/`uploads` have a second real backend as of the
+ * data-exchange-service integration: when `EXCHANGE_SERVICE_URL` is set,
+ * `ExchangeApi*Service` (`@/services/exchange-api`) replaces the Mongo
+ * ones for those three fields — real Postgres-backed exchange rows,
+ * real MinIO-backed file storage, signed upload/download URLs, and
+ * server-side validation, instead of GridFS + an in-memory echo. This is
+ * an opt-in, non-breaking switch: leaving `EXCHANGE_SERVICE_URL` unset
+ * keeps every existing dev setup working exactly as before. See
+ * `docs/exchange-service-integration.md` for the full picture, including
+ * why `datasets`/`entitlements`/`dataProducts` deliberately stay
+ * Mongo-backed (this service is not the catalog of record).
  */
 function createServices(): ServiceRegistry {
   return {
@@ -79,10 +103,17 @@ function createServices(): ServiceRegistry {
     entitlements: new MongoEntitlementService(),
     platformSettings: new MongoPlatformSettingsService(),
     apiAccess: new MongoApiAccessService(),
-    exchanges: new MongoExchangeService(),
-    downloads: new MongoDownloadService(),
-    uploads: new MongoUploadService(),
+    exchanges: env.exchangeServiceEnabled ? new ExchangeApiExchangeService() : new MongoExchangeService(),
+    downloads: env.exchangeServiceEnabled ? new ExchangeApiDownloadService() : new MongoDownloadService(),
+    uploads: env.exchangeServiceEnabled ? new ExchangeApiUploadService() : new MongoUploadService(),
     notifications: new MongoNotificationService(),
+    lakehouseAdmin:
+      env.exchangeServiceEnabled && env.lakehouseServiceEnabled
+        ? new LakehouseAdminApiService()
+        : new UnavailableLakehouseAdminService(),
+    publicationAdmin: env.publicationServiceEnabled
+      ? new PublicationAdminApiService()
+      : new UnavailablePublicationAdminService(),
   };
 }
 
@@ -95,11 +126,13 @@ export type {
   DownloadService,
   EntitlementService,
   ExchangeService,
+  LakehouseAdminService,
   NotificationService,
   OrganizationInvitationService,
   OrganizationMembershipService,
   OrganizationService,
   PlatformSettingsService,
+  PublicationAdminService,
   TenantService,
   UploadService,
 } from "@/services/interfaces";

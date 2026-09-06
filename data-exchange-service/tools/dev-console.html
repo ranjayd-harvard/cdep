@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Exchange Service — Dev Console</title>
+<style>
+  :root {
+    --bg: #0f1420; --panel: #161d2e; --border: #2a3450; --text: #e6e9f0; --muted: #8b93a7;
+    --accent: #4f8cff; --ok: #2ecc71; --err: #ff5d5d; --warn: #f5a623;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--text); font-size: 14px;
+  }
+  header {
+    padding: 14px 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap; position: sticky; top: 0;
+    background: var(--bg); z-index: 10;
+  }
+  header h1 { font-size: 16px; margin: 0; white-space: nowrap; }
+  header input, header select {
+    background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 6px 8px; font-size: 13px;
+  }
+  header label { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 6px; }
+  #identity { font-size: 12px; color: var(--muted); }
+  #identity b { color: var(--accent); }
+  main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 20px; align-items: start; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .col { display: flex; flex-direction: column; gap: 16px; }
+  section.panel {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px;
+  }
+  section.panel h2 { margin: 0 0 4px; font-size: 14px; }
+  section.panel p.hint { margin: 0 0 12px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+  .row label { font-size: 12px; color: var(--muted); min-width: 90px; }
+  input[type=text], input[type=file], select {
+    flex: 1; min-width: 140px; background: #0f1420; border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 6px 8px; font-size: 13px;
+  }
+  button {
+    background: var(--accent); color: white; border: none; border-radius: 6px; padding: 8px 12px;
+    font-size: 13px; cursor: pointer; font-weight: 600;
+  }
+  button.secondary { background: #2a3450; }
+  button.danger { background: var(--err); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button:hover:not(:disabled) { filter: brightness(1.1); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+  th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+  .badge.ok { background: rgba(46,204,113,0.15); color: var(--ok); }
+  .badge.err { background: rgba(255,93,93,0.15); color: var(--err); }
+  .badge.warn { background: rgba(245,166,35,0.15); color: var(--warn); }
+  .timeline { list-style: none; margin: 8px 0 0; padding: 0; font-size: 12px; }
+  .timeline li { padding: 4px 0 4px 16px; border-left: 2px solid var(--border); position: relative; }
+  .timeline li::before { content: ""; position: absolute; left: -5px; top: 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  #log-panel { grid-column: 1 / -1; }
+  #log { max-height: 420px; overflow-y: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+  .entry { border-bottom: 1px solid var(--border); padding: 8px 0; }
+  .entry .line1 { display: flex; gap: 8px; align-items: center; }
+  .entry .method { color: var(--warn); font-weight: 700; }
+  .entry .url { color: var(--muted); overflow-wrap: anywhere; }
+  .entry pre { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; color: #c8d0e0; }
+  a { color: var(--accent); }
+  .result-box { margin-top: 10px; font-size: 12px; background: #0f1420; border: 1px solid var(--border); border-radius: 6px; padding: 8px; }
+  small.mono { font-family: ui-monospace, monospace; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Exchange Service — Dev Console</h1>
+  <label>API base <input id="apiBase" type="text" value="http://localhost:8080" size="24" /></label>
+  <label>Identity
+    <select id="profile">
+      <option value="A">Tenant A — Vobis (CUSTOMER_ADMIN)</option>
+      <option value="B">Tenant B — Globex (CUSTOMER_ADMIN)</option>
+    </select>
+  </label>
+  <span id="identity"></span>
+</header>
+
+<main>
+  <div class="col">
+    <section class="panel">
+      <h2>1. Health</h2>
+      <p class="hint">Confirms the service, Postgres, and MinIO are all reachable.</p>
+      <div class="row">
+        <button onclick="checkLive()">GET /health/live</button>
+        <button onclick="checkReady()">GET /health/ready</button>
+      </div>
+      <div id="health-result" class="result-box" style="display:none"></div>
+    </section>
+
+    <section class="panel">
+      <h2>2. Data products &amp; entitlements</h2>
+      <p class="hint">Lists active data products this identity's tenant can see.</p>
+      <button onclick="listDataProducts()">GET /v1/data-products</button>
+      <div id="dp-result"></div>
+    </section>
+
+    <section class="panel">
+      <h2>3. Upload lifecycle (inbound)</h2>
+      <p class="hint">Runs the full flow: initiate → signed PUT to MinIO → complete → fetch detail/events/validation.</p>
+      <div class="row">
+        <label>Product</label>
+        <select id="uploadProduct">
+          <option value="event-data">event-data</option>
+          <option value="transaction-data">transaction-data</option>
+          <option value="inventory-data">inventory-data</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>File</label>
+        <input id="uploadFile" type="file" />
+      </div>
+      <div class="row">
+        <button onclick="useSampleCsv()" class="secondary">Use sample CSV instead</button>
+        <button onclick="runUpload()">Run full upload</button>
+      </div>
+      <div id="upload-result"></div>
+    </section>
+
+    <section class="panel">
+      <h2>4. My exchanges</h2>
+      <p class="hint">Tenant-scoped list for the current identity.</p>
+      <button onclick="listExchanges()">GET /v1/exchanges</button>
+      <div id="exchanges-result"></div>
+    </section>
+  </div>
+
+  <div class="col">
+    <section class="panel">
+      <h2>5. Outbound publication (internal, simulated Gold)</h2>
+      <p class="hint">Protected by an internal API key, not the tenant JWT — simulates a future Gold hand-off.</p>
+      <div class="row">
+        <label>Internal key</label>
+        <input id="internalKey" type="text" value="dev-internal-key-change-me" />
+      </div>
+      <div class="row">
+        <label>Product</label>
+        <select id="pubProduct">
+          <option value="event-performance">event-performance</option>
+          <option value="settlement-summary">settlement-summary</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>Filename</label>
+        <input id="pubFilename" type="text" value="event-performance-demo.csv" />
+      </div>
+      <div class="row">
+        <button onclick="publish()">Publish fixture</button>
+        <button onclick="getDownloadUrl()" class="secondary">Get signed download URL</button>
+      </div>
+      <div id="pub-result"></div>
+    </section>
+
+    <section class="panel">
+      <h2>6. Multi-tenant isolation check</h2>
+      <p class="hint">Fetches an exchange ID (from step 3 or 5) as the <em>other</em> tenant. A correct setup returns 404, not the data.</p>
+      <div class="row">
+        <label>Exchange ID</label>
+        <input id="isolationExchangeId" type="text" placeholder="exc-..." />
+      </div>
+      <button onclick="checkIsolation()">Try as the other tenant</button>
+      <div id="isolation-result"></div>
+    </section>
+
+    <section class="panel" id="log-panel">
+      <h2>Request log</h2>
+      <p class="hint">Every call this page makes, with status and response body, newest last.</p>
+      <div id="log"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+const PROFILES = {
+  A: { sub: "usr-8a74b91", organization_id: "org-vobis-org-722aea", active_tenant_id: "tenant-default-47d849", role: "CUSTOMER_ADMIN" },
+  B: { sub: "usr-3f0d221", organization_id: "org-globex-org-9c1f2d", active_tenant_id: "tenant-default-b19e21", role: "CUSTOMER_ADMIN" },
+};
+
+let lastUploadExchangeId = null;
+let lastPublicationExchangeId = null;
+
+function apiBase() { return document.getElementById("apiBase").value.replace(/\/$/, ""); }
+function currentProfileKey() { return document.getElementById("profile").value; }
+function currentProfile() { return PROFILES[currentProfileKey()]; }
+function otherProfile() { return PROFILES[currentProfileKey() === "A" ? "B" : "A"]; }
+
+function tokenFor(profile) {
+  return btoa(JSON.stringify(profile)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function renderIdentity() {
+  const p = currentProfile();
+  document.getElementById("identity").innerHTML =
+    `org <b>${p.organization_id}</b> · tenant <b>${p.active_tenant_id}</b> · role <b>${p.role}</b>`;
+}
+document.getElementById("profile").addEventListener("change", renderIdentity);
+renderIdentity();
+
+function logEntry(method, url, status, body) {
+  const log = document.getElementById("log");
+  const div = document.createElement("div");
+  div.className = "entry";
+  const badgeClass = status >= 200 && status < 300 ? "ok" : status === 0 ? "warn" : "err";
+  div.innerHTML = `
+    <div class="line1">
+      <span class="method">${method}</span>
+      <span class="badge ${badgeClass}">${status || "ERR"}</span>
+      <span class="url">${url}</span>
+    </div>
+    <pre>${escapeHtml(typeof body === "string" ? body : JSON.stringify(body, null, 2))}</pre>
+  `;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+
+function escapeHtml(s) {
+  return (s ?? "").toString().replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+}
+
+async function call(method, path, { profile, headers, body, raw } = {}) {
+  const url = raw ? path : apiBase() + path;
+  const h = { ...(headers || {}) };
+  if (profile) h["Authorization"] = "Bearer " + tokenFor(profile);
+  if (body !== undefined) h["Content-Type"] = "application/json";
+  let res, text, json;
+  try {
+    res = await fetch(url, { method, headers: h, body: body !== undefined ? JSON.stringify(body) : undefined });
+    text = await res.text();
+    try { json = JSON.parse(text); } catch { json = text; }
+    logEntry(method, url, res.status, json);
+    return { status: res.status, body: json, ok: res.ok };
+  } catch (err) {
+    logEntry(method, url, 0, String(err));
+    return { status: 0, body: String(err), ok: false };
+  }
+}
+
+async function checkLive() {
+  const r = await call("GET", "/health/live");
+  showResult("health-result", r.ok ? "Live." : "Not reachable.", r.ok);
+}
+async function checkReady() {
+  const r = await call("GET", "/health/ready");
+  const el = document.getElementById("health-result");
+  el.style.display = "block";
+  const checks = r.body?.checks || {};
+  el.innerHTML = Object.entries(checks).map(([k, v]) =>
+    `<span class="badge ${v === "ok" ? "ok" : "err"}">${k}: ${v}</span>`).join(" ") || escapeHtml(r.body);
+}
+function showResult(id, msg, ok) {
+  const el = document.getElementById(id);
+  el.style.display = "block";
+  el.innerHTML = `<span class="badge ${ok ? "ok" : "err"}">${ok ? "OK" : "FAIL"}</span> ${escapeHtml(msg)}`;
+}
+
+async function listDataProducts() {
+  const r = await call("GET", "/v1/data-products", { profile: currentProfile() });
+  const el = document.getElementById("dp-result");
+  if (!r.ok) { el.innerHTML = `<div class="result-box">Request failed — see log.</div>`; return; }
+  const rows = (r.body.items || []).map(p =>
+    `<tr><td>${p.dataProductId}</td><td>${p.direction}</td><td>${p.currentSchemaVersion}</td></tr>`).join("");
+  el.innerHTML = `<table><tr><th>id</th><th>direction</th><th>schema</th></tr>${rows}</table>`;
+}
+
+let sampleCsvOverride = null;
+function useSampleCsv() {
+  sampleCsvOverride = "event_id,event_type,occurred_at\nevt-1,click,2026-09-04T00:00:00Z\nevt-2,view,2026-09-04T00:01:00Z\n";
+  document.getElementById("uploadFile").value = "";
+  showResult("upload-result", "Sample CSV staged — click 'Run full upload'.", true);
+}
+
+async function runUpload() {
+  const fileInput = document.getElementById("uploadFile");
+  const dataProductId = document.getElementById("uploadProduct").value;
+  let content, filename, contentType;
+
+  if (fileInput.files.length > 0) {
+    const file = fileInput.files[0];
+    content = await file.arrayBuffer();
+    filename = file.name;
+    contentType = file.type || "application/octet-stream";
+  } else if (sampleCsvOverride) {
+    content = sampleCsvOverride;
+    filename = `sample-${Date.now()}.csv`;
+    contentType = "text/csv";
+  } else {
+    showResult("upload-result", "Pick a file, or click 'Use sample CSV instead'.", false);
+    return;
+  }
+  const sizeBytes = content instanceof ArrayBuffer ? content.byteLength : new Blob([content]).size;
+
+  const profile = currentProfile();
+  const init = await call("POST", "/v1/uploads", {
+    profile, body: { dataProductId, filename, contentType, sizeBytes, schemaVersion: "1.0" },
+  });
+  if (!init.ok) { showResult("upload-result", "Initiate failed — see log.", false); return; }
+
+  // Done with a plain fetch (not the call() helper) because call() always
+  // JSON-encodes its body, and this needs to send the raw file bytes.
+  let putOk = false;
+  try {
+    const res = await fetch(init.body.upload.url, { method: "PUT", headers: { "Content-Type": contentType }, body: content });
+    logEntry("PUT", init.body.upload.url, res.status, "(binary upload — body not logged)");
+    putOk = res.ok;
+  } catch (err) {
+    logEntry("PUT", init.body.upload.url, 0, String(err));
+  }
+  if (!putOk) { showResult("upload-result", "Signed PUT to storage failed — see log.", false); return; }
+
+  const complete = await call("POST", `/v1/uploads/${init.body.exchangeId}/complete`, { profile });
+  if (!complete.ok) { showResult("upload-result", "Complete failed — see log.", false); return; }
+
+  lastUploadExchangeId = init.body.exchangeId;
+  document.getElementById("isolationExchangeId").value = lastUploadExchangeId;
+
+  const [detail, events, validation] = await Promise.all([
+    call("GET", `/v1/exchanges/${lastUploadExchangeId}`, { profile }),
+    call("GET", `/v1/exchanges/${lastUploadExchangeId}/events`, { profile }),
+    call("GET", `/v1/exchanges/${lastUploadExchangeId}/validation`, { profile }),
+  ]);
+
+  const el = document.getElementById("upload-result");
+  const statusOk = detail.body.status === "VALIDATED";
+  const timeline = (events.body.items || []).map(e => `<li>${e.eventType} ${e.toStatus ? "→ " + e.toStatus : ""}</li>`).join("");
+  el.innerHTML = `
+    <div class="result-box">
+      <div><span class="badge ${statusOk ? "ok" : "warn"}">${detail.body.status}</span>
+        exchange <small class="mono">${lastUploadExchangeId}</small></div>
+      <div>file: ${detail.body.file?.filename} (${detail.body.file?.sizeBytes} bytes, ${detail.body.file?.format})</div>
+      <div>records: ${detail.body.recordCount} valid, ${detail.body.errorCount} errors
+        — validation: <b>${validation.body.status}</b></div>
+      <ul class="timeline">${timeline}</ul>
+    </div>`;
+}
+
+async function listExchanges() {
+  const r = await call("GET", "/v1/exchanges", { profile: currentProfile() });
+  const el = document.getElementById("exchanges-result");
+  if (!r.ok) { el.innerHTML = `<div class="result-box">Request failed — see log.</div>`; return; }
+  const rows = (r.body.items || []).map(e =>
+    `<tr><td><small class="mono">${e.exchangeId}</small></td><td>${e.direction}</td><td>${e.status}</td></tr>`).join("");
+  el.innerHTML = `<table><tr><th>id</th><th>dir</th><th>status</th></tr>${rows}</table>` +
+    (rows ? "" : `<p class="hint">No exchanges yet for this tenant — run step 3 or 5 first.</p>`);
+}
+
+async function publish() {
+  const profile = currentProfile();
+  const internalKey = document.getElementById("internalKey").value;
+  const dataProductId = document.getElementById("pubProduct").value;
+  const filename = document.getElementById("pubFilename").value;
+  const r = await call("POST", "/internal/v1/publications", {
+    headers: { "x-internal-api-key": internalKey },
+    body: {
+      organizationId: profile.organization_id,
+      tenantId: profile.active_tenant_id,
+      dataProductId, filename,
+      sourceObject: "gold/fixture (simulated)",
+    },
+  });
+  const el = document.getElementById("pub-result");
+  if (!r.ok) { el.innerHTML = `<div class="result-box">Publish failed — see log.</div>`; return; }
+  lastPublicationExchangeId = r.body.exchangeId;
+  document.getElementById("isolationExchangeId").value = lastPublicationExchangeId;
+  el.innerHTML = `<div class="result-box"><span class="badge ok">${r.body.status}</span>
+    exchange <small class="mono">${lastPublicationExchangeId}</small> — ${r.body.filename}</div>`;
+}
+
+async function getDownloadUrl() {
+  if (!lastPublicationExchangeId) { showResult("pub-result", "Publish an exchange first.", false); return; }
+  const profile = currentProfile();
+  const r = await call("POST", `/v1/downloads/${lastPublicationExchangeId}/url`, { profile });
+  const el = document.getElementById("pub-result");
+  if (!r.ok) { el.innerHTML += `<div class="result-box">Download URL request failed — see log.</div>`; return; }
+  el.innerHTML += `<div class="result-box">Signed URL (expires in ${r.body.expiresInSeconds}s):<br/>
+    <a href="${r.body.downloadUrl}" target="_blank">${r.body.filename}</a></div>`;
+}
+
+async function checkIsolation() {
+  const exchangeId = document.getElementById("isolationExchangeId").value.trim();
+  const el = document.getElementById("isolation-result");
+  if (!exchangeId) { el.innerHTML = `<div class="result-box">Paste an exchange ID first (or run step 3 / 5).</div>`; return; }
+  const r = await call("GET", `/v1/exchanges/${exchangeId}`, { profile: otherProfile() });
+  const pass = r.status === 404;
+  el.innerHTML = `<div class="result-box"><span class="badge ${pass ? "ok" : "err"}">${pass ? "PASS" : "FAIL"}</span>
+    requested as <b>${otherProfile().active_tenant_id}</b> → HTTP ${r.status}
+    ${pass ? "(correctly hidden)" : "(should have been 404!)"}</div>`;
+}
+</script>
+</body>
+</html>

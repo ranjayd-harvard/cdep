@@ -1,0 +1,22 @@
+# Future AWS deployment target. Not used locally.
+#
+# Swapping from MinIO to real S3 is a configuration change only: the same
+# StorageClient interface (src/lakehouse/storage/interface.py) and the same
+# S3CompatibleStorage implementation (src/lakehouse/storage/s3_storage.py)
+# are used for both — only the endpoint/credentials/catalog differ.
+kind: s3
+endpoint_url: null # use AWS default endpoint resolution
+region: us-east-1
+access_key_env: AWS_ACCESS_KEY_ID
+secret_key_env: AWS_SECRET_ACCESS_KEY
+path_style_access: false
+buckets:
+  exchange_inbound: acme-exchange-inbound
+  bronze: acme-lakehouse-bronze
+  silver: acme-lakehouse-silver
+  gold: acme-lakehouse-gold
+
+catalog:
+  # AWS Glue Data Catalog (or another Iceberg-compatible catalog).
+  type: glue
+  warehouse: s3://acme-lakehouse-bronze/

@@ -26,6 +26,36 @@ services:
       SMTP_USER: "${SMTP_USER:-}"
       SMTP_PASS: "${SMTP_PASS:-}"
       SMTP_FROM: "${SMTP_FROM:-no-reply@portal.local}"
+      # data-exchange-service integration — see
+      # docs/exchange-service-integration.md. "host.docker.internal" is
+      # Docker Desktop's DNS name for the host machine: this container
+      # can't reach data-exchange-service's own docker-compose network
+      # directly, but it CAN reach data-exchange-service's host-published
+      # port 8080 this way. Leave EXCHANGE_SERVICE_URL unset to fall back
+      # to the Mongo-backed services untouched.
+      EXCHANGE_SERVICE_URL: "${EXCHANGE_SERVICE_URL:-}"
+      EXCHANGE_SERVICE_INTERNAL_API_KEY: "${EXCHANGE_SERVICE_INTERNAL_API_KEY:-}"
+      # data-lakehouse superadmin integration — backs /admin/lakehouse. Same
+      # opt-in pattern as EXCHANGE_SERVICE_URL above: unset means that page
+      # renders a "not configured" empty state instead of crashing.
+      # "host.docker.internal" reaches data-lakehouse's own host-published
+      # API port (8090) the same way EXCHANGE_SERVICE_URL reaches 8080.
+      LAKEHOUSE_SERVICE_URL: "${LAKEHOUSE_SERVICE_URL:-}"
+      LAKEHOUSE_SERVICE_INTERNAL_API_KEY: "${LAKEHOUSE_SERVICE_INTERNAL_API_KEY:-}"
+      # data-publication-service superadmin integration — backs the
+      # "Publish Gold Product" panel on /admin/lakehouse/pipelines. Same
+      # opt-in pattern as LAKEHOUSE_SERVICE_URL above. "host.docker.internal"
+      # reaches data-publication-service's own host-published API port
+      # (8091) the same way LAKEHOUSE_SERVICE_URL reaches 8090.
+      PUBLICATION_SERVICE_URL: "${PUBLICATION_SERVICE_URL:-}"
+      PUBLICATION_SERVICE_INTERNAL_API_KEY: "${PUBLICATION_SERVICE_INTERNAL_API_KEY:-}"
+      # Needed because this container also runs in Docker: the signed
+      # upload URL's hostname (data-exchange-service's own
+      # OBJECT_STORAGE_PUBLIC_ENDPOINT, typically "localhost:9000") means
+      # something different from inside this container than it does on
+      # the host or in a real browser. See the doc comment on
+      # `putToSignedUrl` in src/lib/exchange-service/client.ts.
+      EXCHANGE_SERVICE_STORAGE_RELAY_HOST: "${EXCHANGE_SERVICE_STORAGE_RELAY_HOST:-}"
     depends_on:
       mongo:
         condition: service_healthy

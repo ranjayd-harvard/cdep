@@ -1,0 +1,16 @@
+# Static, non-secret application configuration. Environment-specific
+# secrets/hosts live in .env (see src/publication/config/settings.py) --
+# this file is for values that are the same across every local run.
+
+service:
+  name: data-publication-service
+  description: >
+    Phase 4 outbound publication layer: reads Gold Data Products from the
+    lakehouse, projects them onto customer-facing contracts, and hands the
+    resulting artifact to data-exchange-service as an OUTBOUND exchange.
+
+defaults:
+  checksumAlgorithm: SHA-256
+  exportFormats:
+    - PARQUET
+    - CSV

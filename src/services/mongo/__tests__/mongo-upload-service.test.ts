@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createFakeDb } from "@/test/fake-mongo";
+import { fakeTenantContext } from "@/test/fake-tenant-context";
 
 const { getDbMock, storeFileMock } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
@@ -40,7 +41,7 @@ describe("MongoUploadService", () => {
     const service = new MongoUploadService();
     const file = new File(["id,name\n1,a\n2,b\n"], "data.csv", { type: "text/csv" });
 
-    const result = await service.uploadFile(TENANT_A, file, {
+    const result = await service.uploadFile(fakeTenantContext(TENANT_A), file, {
       datasetId: "ds-a",
       filename: "data.csv",
       fileSize: file.size,
@@ -74,7 +75,7 @@ describe("MongoUploadService", () => {
     const service = new MongoUploadService();
     const file = new File(["not real parquet"], "data.exe", { type: "application/octet-stream" });
 
-    const result = await service.uploadFile(TENANT_A, file, {
+    const result = await service.uploadFile(fakeTenantContext(TENANT_A), file, {
       datasetId: "ds-a",
       filename: "data.exe",
       fileSize: file.size,

@@ -1,0 +1,79 @@
+# Publication contract for the `event-performance` Gold Data Product.
+#
+# This is the ONLY place the externally-published schema is defined --
+# publication code projects exactly these columns, in this order, and never
+# derives published columns dynamically from gold.event_performance's
+# physical schema (which also carries organization_id/tenant_id/pipeline
+# lineage columns that must NOT reach the customer artifact unless listed
+# here explicitly).
+
+dataProduct:
+  id: event-performance
+  name: Event Performance
+  version: "1.0"
+  owner: Event Analytics
+
+source:
+  table: gold.event_performance
+
+grain:
+  - event_id
+
+tenantScope:
+  organizationColumn: organization_id
+  tenantColumn: tenant_id
+
+publishedSchema:
+  - name: event_id
+    source: event_id
+    type: string
+    required: true
+
+  - name: venue_id
+    source: venue_id
+    type: string
+    required: true
+
+  - name: event_date
+    source: event_date
+    type: date
+    required: true
+
+  - name: tickets_sold
+    source: tickets_sold
+    type: long
+    required: false
+
+  - name: gross_revenue
+    source: gross_revenue
+    type: "decimal(18,2)"
+    required: false
+
+  - name: revenue_per_ticket
+    source: revenue_per_ticket
+    type: "decimal(18,2)"
+    required: false
+
+formats:
+  - PARQUET
+  - CSV
+
+defaultFormat: PARQUET
+
+publication:
+  filenamePattern: "event-performance-{date}-{publicationId}"
+  compression:
+    parquet: snappy
+    csv: gzip
+  expirationHours: 168
+
+quality:
+  verifySchema: true
+  verifyRecordCount: true
+  requireNonEmpty: true
+  enforceGrain: true
+
+# No masking configured for Event Performance -- see
+# src/publication/transformations/masking.py for the extension point future
+# products can use (e.g. an `email` or `account_number` column).
+masking: {}

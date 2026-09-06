@@ -1,0 +1,61 @@
+# Silver contract for the canonical "event" entity (AGENTS.md section 10).
+# Canonical enterprise representation of an event, independent of how any
+# specific customer submitted it.
+
+entity: event
+version: "1.0"
+owner: data-platform
+description: >
+  Canonical enterprise representation of an event: validated, standardized,
+  deduplicated, business-key aware. Sourced from bronze.event_data via
+  mappings/bronze_to_silver/event-data-to-event.yaml.
+
+businessKey:
+  - organization_id
+  - tenant_id
+  - event_id
+
+# AGENTS.md section 13: among records sharing the same business key, the
+# record with the greatest `order_by` value wins; `tiebreaker` breaks ties
+# (e.g. two records with the same _source_received_at).
+deduplication:
+  order_by: _source_received_at
+  tiebreaker: _ingested_at
+
+incremental:
+  strategy: UPSERT
+
+quality:
+  rules:
+    - name: event_id_required
+      type: not_null
+      column: event_id
+      severity: ERROR
+
+    - name: venue_id_required
+      type: not_null
+      column: venue_id
+      severity: ERROR
+
+    - name: event_date_valid
+      type: not_null
+      column: event_date
+      severity: ERROR
+
+    - name: tickets_non_negative
+      type: min
+      column: tickets_sold
+      value: 0
+      severity: ERROR
+
+    - name: revenue_non_negative
+      type: min
+      column: gross_revenue
+      value: 0
+      severity: ERROR
+
+  policy:
+    errorThresholdPercent: 1.0
+    onFailure:
+      quarantineInvalidRecords: true
+      failPipeline: false

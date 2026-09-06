@@ -1,5 +1,6 @@
 import { UploadStatus, type UploadRequest, type UploadResult } from "@/models";
 import type { UploadProgressHandler, UploadService } from "@/services/interfaces";
+import type { TenantContext } from "@/lib/tenant";
 import { DEFAULT_TENANT_ID } from "@/data/mocks/tenants";
 import { simulateLatency } from "@/lib/simulate";
 
@@ -14,12 +15,12 @@ let uploadSequence = 0;
 
 export class MockUploadService implements UploadService {
   async uploadFile(
-    tenantId: string,
+    context: TenantContext,
     _file: File,
     request: UploadRequest,
     onProgress?: UploadProgressHandler,
   ): Promise<UploadResult> {
-    if (tenantId !== DEFAULT_TENANT_ID) {
+    if (context.tenantId !== DEFAULT_TENANT_ID) {
       throw new Error("Cannot upload data for an unrecognized tenant.");
     }
 

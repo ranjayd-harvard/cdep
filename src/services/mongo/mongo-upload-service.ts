@@ -8,6 +8,7 @@ import {
   type UploadResult,
 } from "@/models";
 import type { UploadProgressHandler, UploadService } from "@/services/interfaces";
+import type { TenantContext } from "@/lib/tenant";
 import { ACCEPTED_UPLOAD_EXTENSIONS, MAX_UPLOAD_SIZE_BYTES, isAcceptedUploadFile } from "@/lib/upload-validation";
 import { storeFile } from "@/lib/file-storage";
 import { createExchange } from "@/lib/exchange-directory";
@@ -26,7 +27,7 @@ import { findDatasetById } from "@/lib/dataset-directory";
  */
 export class MongoUploadService implements UploadService {
   async uploadFile(
-    tenantId: string,
+    context: TenantContext,
     file: File,
     request: UploadRequest,
     _onProgress?: UploadProgressHandler,
@@ -39,7 +40,7 @@ export class MongoUploadService implements UploadService {
         ? `Unsupported file type. Accepted types: ${ACCEPTED_UPLOAD_EXTENSIONS.join(", ")}`
         : `File exceeds the maximum size of ${MAX_UPLOAD_SIZE_BYTES} bytes.`;
 
-      const exchange = await createExchange(tenantId, {
+      const exchange = await createExchange(context.tenantId, {
         datasetId: request.datasetId,
         direction: ExchangeDirection.INBOUND,
         status: ExchangeStatus.FAILED,
@@ -53,7 +54,7 @@ export class MongoUploadService implements UploadService {
         validationErrors: [{ field: "file", message }],
       });
 
-      await createNotification(tenantId, {
+      await createNotification(context.tenantId, {
         type: NotificationType.EXCHANGE_FAILED,
         title: "Upload failed validation",
         message: `${request.filename} could not be processed: ${message}`,
@@ -66,7 +67,7 @@ export class MongoUploadService implements UploadService {
     const recordCount = countRecords(request.filename, buffer);
     const storageFileId = await storeFile(request.filename, request.fileType || "application/octet-stream", buffer);
 
-    const exchange = await createExchange(tenantId, {
+    const exchange = await createExchange(context.tenantId, {
       datasetId: request.datasetId,
       direction: ExchangeDirection.INBOUND,
       status: ExchangeStatus.COMPLETED,
@@ -83,7 +84,7 @@ export class MongoUploadService implements UploadService {
     // for download is literally the uploaded file, echoed back under the
     // same storage id — not a modeled business rule. A real pipeline
     // would replace this block with the actual generated output.
-    const download = await createDownload(tenantId, {
+    const download = await createDownload(context.tenantId, {
       datasetId: request.datasetId,
       filename: request.filename,
       format: formatFor(request.filename),
@@ -92,7 +93,7 @@ export class MongoUploadService implements UploadService {
       sourceExchangeId: exchange.id,
     });
 
-    await createExchange(tenantId, {
+    await createExchange(context.tenantId, {
       datasetId: request.datasetId,
       direction: ExchangeDirection.OUTBOUND,
       status: ExchangeStatus.COMPLETED,
@@ -104,7 +105,7 @@ export class MongoUploadService implements UploadService {
       completedAt: new Date().toISOString(),
     });
 
-    await createNotification(tenantId, {
+    await createNotification(context.tenantId, {
       type: NotificationType.EXCHANGE_COMPLETED,
       title: "Upload processed successfully",
       message: `${request.filename} was validated and is now available for download.`,

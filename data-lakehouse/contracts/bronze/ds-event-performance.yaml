@@ -1,0 +1,41 @@
+# Data contract for the "ds-event-performance" data product (the portal's
+# real, synced-from-cdep BIDIRECTIONAL "Event Performance" dataset --
+# distinct from the older OUTBOUND-only fixture "event-performance").
+#
+# No fixed schema is declared: source files observed for this data product
+# so far are ad hoc exports (e.g. a Salesforce product-catalog CSV) rather
+# than a single stable shape. Under PERMISSIVE mode with no declared
+# fields, every business column passes through with its source-observed
+# type (string for CSV) -- source fidelity preserved, no casting risk.
+# Tighten this contract with real `schema.fields` once this data product's
+# actual shape stabilizes.
+
+dataProductId: ds-event-performance
+version: "1.0"
+owner: platform-data-team # placeholder; replace with real team ownership
+
+source:
+  formats:
+    - CSV
+    - JSON
+    - PARQUET
+
+bronze:
+  namespace: bronze
+  table: event_performance
+
+csv:
+  header: true
+  delimiter: ","
+  encoding: UTF-8
+
+json:
+  lines: true
+  encoding: UTF-8
+
+schema:
+  mode: PERMISSIVE
+  fields: []
+
+quality:
+  rejectUnreadableRecords: true

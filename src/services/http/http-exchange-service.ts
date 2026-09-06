@@ -1,5 +1,6 @@
 import type { Exchange } from "@/models";
 import type { ExchangeService } from "@/services/interfaces";
+import type { TenantContext } from "@/lib/tenant";
 import { httpGet } from "@/lib/http-client";
 
 /**
@@ -10,11 +11,11 @@ import { httpGet } from "@/lib/http-client";
  * endpoints are unexercised (kept for interface/shape parity).
  */
 export class HttpExchangeService implements ExchangeService {
-  getExchanges(_tenantId: string): Promise<Exchange[]> {
+  getExchanges(_context: TenantContext): Promise<Exchange[]> {
     return httpGet<Exchange[]>(`/api/exchanges`);
   }
 
-  getExchange(_tenantId: string, exchangeId: string): Promise<Exchange | null> {
+  getExchange(_context: TenantContext, exchangeId: string): Promise<Exchange | null> {
     return httpGet<Exchange | null>(`/api/exchanges/${encodeURIComponent(exchangeId)}`);
   }
 }

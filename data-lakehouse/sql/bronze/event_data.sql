@@ -1,0 +1,36 @@
+-- Documentation only. This table is created programmatically by PyIceberg
+-- (src/lakehouse/bronze/bronze_table.py) from a pyarrow.Schema, not by
+-- executing this file. It is kept here to document the logical Bronze
+-- schema in familiar DDL form and is NOT run against Postgres (it lives
+-- under sql/bronze/, a subdirectory that Postgres's
+-- docker-entrypoint-initdb.d does not descend into).
+--
+-- Table: bronze.event_data   (Iceberg namespace "bronze", table "event_data")
+
+-- CREATE TABLE bronze.event_data (
+--     -- business columns, preserved as-received (no renaming/coercion)
+--     event_id        STRING,
+--     venue_id        STRING,
+--     event_date      STRING,
+--     tickets_sold    STRING,
+--     gross_revenue   STRING,
+--
+--     -- technical lineage / ownership columns (see
+--     -- src/lakehouse/bronze/metadata_columns.py for the authoritative list)
+--     _organization_id     STRING NOT NULL,
+--     _tenant_id           STRING NOT NULL,
+--     _exchange_id         STRING NOT NULL,
+--     _ingestion_id        STRING NOT NULL,
+--     _data_product_id     STRING NOT NULL,
+--     _schema_version      STRING NOT NULL,
+--     _source_file         STRING NOT NULL,
+--     _source_path         STRING NOT NULL,
+--     _source_format       STRING NOT NULL,
+--     _source_received_at  TIMESTAMP,
+--     _ingested_at         TIMESTAMP NOT NULL,
+--     _source_row_number   LONG,
+--     _record_hash         STRING,
+--     _source_system       STRING,
+--     _source_channel      STRING
+-- )
+-- PARTITIONED BY (_tenant_id, days(_ingested_at));

@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const result = await services.uploads.uploadFile(ctx.tenant.tenantId, file, {
+  const result = await services.uploads.uploadFile(ctx.tenant, file, {
     datasetId,
     filename: file.name,
     fileSize: file.size,

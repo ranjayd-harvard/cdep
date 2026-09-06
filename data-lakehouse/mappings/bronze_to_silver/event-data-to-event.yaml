@@ -1,0 +1,47 @@
+# Bronze->Silver mapping: bronze.event_data -> silver.event (AGENTS.md
+# section 9). Configuration-driven: source column, target column, canonical
+# type, required-ness, default, optional named transform.
+
+version: "1.0"
+
+source:
+  table: bronze.event_data
+  dataProductId: event-data
+
+target:
+  table: silver.event
+  entity: event
+
+keys:
+  businessKey:
+    - event_id
+
+mapping:
+  event_id:
+    source: event_id
+    type: string
+    required: true
+
+  venue_id:
+    source: venue_id
+    type: string
+    required: true
+
+  event_date:
+    source: event_date
+    type: date
+    required: true
+
+  tickets_sold:
+    source: tickets_sold
+    type: long
+    required: false
+
+  gross_revenue:
+    source: gross_revenue
+    type: "decimal(18,2)"
+    required: false
+
+lineage:
+  source_exchange_id: _exchange_id
+  source_ingestion_id: _ingestion_id

@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // data-exchange-service is an independent Node/Fastify project nested
+    // in this directory (see docs/exchange-service-integration.md) — its
+    // own package.json/eslint.config.mjs/tsconfig.json own its linting.
+    "data-exchange-service/**",
   ]),
 ]);
 

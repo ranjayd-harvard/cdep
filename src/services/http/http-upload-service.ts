@@ -1,5 +1,6 @@
 import { UploadStatus, type UploadRequest, type UploadResult } from "@/models";
 import type { UploadProgressHandler, UploadService } from "@/services/interfaces";
+import type { TenantContext } from "@/lib/tenant";
 
 /**
  * The one HTTP service that can't use `httpGet`/`httpPost` (JSON-only):
@@ -12,7 +13,7 @@ import type { UploadProgressHandler, UploadService } from "@/services/interfaces
  */
 export class HttpUploadService implements UploadService {
   uploadFile(
-    _tenantId: string,
+    _context: TenantContext,
     file: File,
     request: UploadRequest,
     onProgress?: UploadProgressHandler,

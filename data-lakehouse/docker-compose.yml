@@ -1,0 +1,167 @@
+name: data-lakehouse
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: lakehouse
+      POSTGRES_PASSWORD: lakehouse
+      POSTGRES_DB: lakehouse
+    ports:
+      # Host port 5434 (not 5432/5433): 5433 is already used by
+      # data-exchange-service's Postgres on this machine. Internal port
+      # (used by other containers on this compose network) stays 5432.
+      - "5434:5432"
+    volumes:
+      - lakehouse-postgres-data:/var/lib/postgresql/data
+      - ./sql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lakehouse -d lakehouse"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: lakehouse
+      MINIO_ROOT_PASSWORD: lakehouse123
+    ports:
+      # Host ports 9010/9011 (not 9000/9001): those are already used by
+      # data-exchange-service's MinIO on this machine.
+      - "9010:9000"
+      - "9011:9001"
+    volumes:
+      - lakehouse-minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  bucket-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 lakehouse lakehouse123 &&
+      mc mb -p local/exchange-inbound local/lakehouse-bronze local/lakehouse-silver local/lakehouse-gold &&
+      echo 'buckets ready'
+      "
+    restart: "no"
+
+  ingestion:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      bucket-init:
+        condition: service_completed_successfully
+    environment:
+      LAKEHOUSE_ENV: local
+      LAKEHOUSE_METADATA_DB_HOST: postgres
+      LAKEHOUSE_METADATA_DB_PORT: "5432"
+      LAKEHOUSE_METADATA_DB_NAME: lakehouse
+      LAKEHOUSE_METADATA_DB_USER: lakehouse
+      LAKEHOUSE_METADATA_DB_PASSWORD: lakehouse
+      LAKEHOUSE_CATALOG_URI: postgresql+psycopg2://lakehouse:lakehouse@postgres:5432/lakehouse
+      LAKEHOUSE_CATALOG_SCHEMA: iceberg_catalog
+      LAKEHOUSE_WAREHOUSE: s3://lakehouse-bronze/
+      LAKEHOUSE_STORAGE_KIND: s3
+      LAKEHOUSE_S3_ENDPOINT: http://minio:9000
+      LAKEHOUSE_S3_ACCESS_KEY: lakehouse
+      LAKEHOUSE_S3_SECRET_KEY: lakehouse123
+      LAKEHOUSE_S3_REGION: us-east-1
+      LAKEHOUSE_BUCKET_EXCHANGE_INBOUND: exchange-inbound
+      LAKEHOUSE_BUCKET_BRONZE: lakehouse-bronze
+      LAKEHOUSE_BUCKET_SILVER: lakehouse-silver
+      LAKEHOUSE_BUCKET_GOLD: lakehouse-gold
+      LAKEHOUSE_EXCHANGE_CLIENT: mock
+      LAKEHOUSE_SCHEMA_MODE: PERMISSIVE
+    volumes:
+      - ./src:/app/src
+      - ./config:/app/config
+      - ./contracts:/app/contracts
+      - ./mappings:/app/mappings
+      - ./samples:/app/samples
+      - ./scripts:/app/scripts
+      - ./tests:/app/tests
+    working_dir: /app
+    tty: true
+    stdin_open: true
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      bucket-init:
+        condition: service_completed_successfully
+    environment:
+      LAKEHOUSE_ENV: local
+      LAKEHOUSE_METADATA_DB_HOST: postgres
+      LAKEHOUSE_METADATA_DB_PORT: "5432"
+      LAKEHOUSE_METADATA_DB_NAME: lakehouse
+      LAKEHOUSE_METADATA_DB_USER: lakehouse
+      LAKEHOUSE_METADATA_DB_PASSWORD: lakehouse
+      LAKEHOUSE_CATALOG_URI: postgresql+psycopg2://lakehouse:lakehouse@postgres:5432/lakehouse
+      LAKEHOUSE_CATALOG_SCHEMA: iceberg_catalog
+      LAKEHOUSE_WAREHOUSE: s3://lakehouse-bronze/
+      LAKEHOUSE_STORAGE_KIND: s3
+      LAKEHOUSE_S3_ENDPOINT: http://minio:9000
+      LAKEHOUSE_S3_ACCESS_KEY: lakehouse
+      LAKEHOUSE_S3_SECRET_KEY: lakehouse123
+      LAKEHOUSE_S3_REGION: us-east-1
+      LAKEHOUSE_BUCKET_EXCHANGE_INBOUND: exchange-inbound
+      LAKEHOUSE_BUCKET_BRONZE: lakehouse-bronze
+      LAKEHOUSE_BUCKET_SILVER: lakehouse-silver
+      LAKEHOUSE_BUCKET_GOLD: lakehouse-gold
+      # http (not mock): unlike the `ingestion` service above, this API
+      # backs the portal's live /admin/lakehouse "Run ingestion" button
+      # against real exchanges, not local fixtures -- so it needs a real
+      # data-exchange-service to talk to. "host.docker.internal" is Docker
+      # Desktop's DNS name for the host machine (same pattern the root
+      # portal container uses for EXCHANGE_SERVICE_URL/
+      # EXCHANGE_SERVICE_STORAGE_RELAY_HOST): this container can't reach
+      # data-exchange-service's own compose network directly, but it CAN
+      # reach its host-published ports 8080/9000.
+      LAKEHOUSE_EXCHANGE_CLIENT: http
+      LAKEHOUSE_EXCHANGE_SERVICE_BASE_URL: http://host.docker.internal:8080
+      LAKEHOUSE_EXCHANGE_SERVICE_API_KEY: dev-internal-key-change-me
+      LAKEHOUSE_EXCHANGE_S3_ENDPOINT: http://host.docker.internal:9000
+      LAKEHOUSE_EXCHANGE_S3_ACCESS_KEY: minioadmin
+      LAKEHOUSE_EXCHANGE_S3_SECRET_KEY: minioadmin
+      LAKEHOUSE_SCHEMA_MODE: PERMISSIVE
+      # Superadmin portal integration -- see /admin/lakehouse in the portal.
+      LAKEHOUSE_INTERNAL_API_KEY: dev-internal-key-change-me-lakehouse
+    ports:
+      # Host port 8090 (container listens on 8000): every other port in the
+      # monorepo is already taken -- portal 3091, mongo 27025,
+      # data-exchange-service 5433/9000/9001/8080, this service's own
+      # postgres/minio on 5434/9010/9011.
+      - "8090:8000"
+    volumes:
+      - ./src:/app/src
+      - ./config:/app/config
+      - ./contracts:/app/contracts
+      - ./mappings:/app/mappings
+      - ./samples:/app/samples
+      - ./scripts:/app/scripts
+      - ./tests:/app/tests
+    working_dir: /app
+    command: ["-c", "uvicorn lakehouse.api.app:app --host 0.0.0.0 --port 8000"]
+
+volumes:
+  lakehouse-postgres-data:
+  lakehouse-minio-data:

@@ -1,0 +1,133 @@
+name: data-publication-service
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: publication
+      POSTGRES_PASSWORD: publication
+      POSTGRES_DB: publication
+    ports:
+      # Host port 5436: 5432 (host default), 5433 (data-exchange-service),
+      # and 5434 (data-lakehouse) are already taken on this machine.
+      - "5436:5432"
+    volumes:
+      - publication-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U publication -d publication"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Interactive runner for scripts/publish_gold_product.py etc. -- this
+  # service owns no storage of its own besides its control-plane Postgres
+  # above: it reads data-lakehouse's Iceberg catalog/MinIO and talks to
+  # data-exchange-service, both over "host.docker.internal" (their compose
+  # stacks are independent, same pattern as data-lakehouse's own `api`
+  # service reaching data-exchange-service -- see that service's
+  # docker-compose.yml comment for the full rationale).
+  runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PUBLICATION_ENV: local
+      PUBLICATION_DB_HOST: postgres
+      PUBLICATION_DB_PORT: "5432"
+      PUBLICATION_DB_NAME: publication
+      PUBLICATION_DB_USER: publication
+      PUBLICATION_DB_PASSWORD: publication
+
+      PUBLICATION_LAKEHOUSE_CATALOG_NAME: local
+      PUBLICATION_LAKEHOUSE_CATALOG_URI: postgresql+psycopg2://lakehouse:lakehouse@host.docker.internal:5434/lakehouse
+      PUBLICATION_LAKEHOUSE_WAREHOUSE: s3://lakehouse-bronze/
+      PUBLICATION_LAKEHOUSE_S3_ENDPOINT: http://host.docker.internal:9010
+      PUBLICATION_LAKEHOUSE_S3_ACCESS_KEY: lakehouse
+      PUBLICATION_LAKEHOUSE_S3_SECRET_KEY: lakehouse123
+      PUBLICATION_LAKEHOUSE_S3_REGION: us-east-1
+      PUBLICATION_LAKEHOUSE_METADATA_DB_URL: postgresql+psycopg2://lakehouse:lakehouse@host.docker.internal:5434/lakehouse
+
+      PUBLICATION_EXCHANGE_SERVICE_BASE_URL: http://host.docker.internal:8080
+      PUBLICATION_EXCHANGE_SERVICE_API_KEY: dev-internal-key-change-me
+      PUBLICATION_EXCHANGE_STORAGE_RELAY_HOST: host.docker.internal:9000
+
+      PUBLICATION_WORK_DIR: /app/publication-work
+      PUBLICATION_CONTRACTS_DIR: /app/contracts/products
+    volumes:
+      - ./src:/app/src
+      - ./config:/app/config
+      - ./contracts:/app/contracts
+      - ./sql:/app/sql
+      - ./scripts:/app/scripts
+      - ./tests:/app/tests
+      - publication-work:/app/publication-work
+    working_dir: /app
+    tty: true
+    stdin_open: true
+
+  # Internal HTTP API backing the portal's superadmin-only "Publish Gold
+  # Product" panel at /admin/lakehouse/pipelines -- same pattern as
+  # data-lakehouse's own `api` service (host port 8090) reaching
+  # data-exchange-service (8080) over host.docker.internal.
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PUBLICATION_ENV: local
+      PUBLICATION_DB_HOST: postgres
+      PUBLICATION_DB_PORT: "5432"
+      PUBLICATION_DB_NAME: publication
+      PUBLICATION_DB_USER: publication
+      PUBLICATION_DB_PASSWORD: publication
+
+      PUBLICATION_LAKEHOUSE_CATALOG_NAME: local
+      PUBLICATION_LAKEHOUSE_CATALOG_URI: postgresql+psycopg2://lakehouse:lakehouse@host.docker.internal:5434/lakehouse
+      PUBLICATION_LAKEHOUSE_WAREHOUSE: s3://lakehouse-bronze/
+      PUBLICATION_LAKEHOUSE_S3_ENDPOINT: http://host.docker.internal:9010
+      PUBLICATION_LAKEHOUSE_S3_ACCESS_KEY: lakehouse
+      PUBLICATION_LAKEHOUSE_S3_SECRET_KEY: lakehouse123
+      PUBLICATION_LAKEHOUSE_S3_REGION: us-east-1
+      PUBLICATION_LAKEHOUSE_METADATA_DB_URL: postgresql+psycopg2://lakehouse:lakehouse@host.docker.internal:5434/lakehouse
+
+      PUBLICATION_EXCHANGE_SERVICE_BASE_URL: http://host.docker.internal:8080
+      PUBLICATION_EXCHANGE_SERVICE_API_KEY: dev-internal-key-change-me
+      PUBLICATION_EXCHANGE_STORAGE_RELAY_HOST: host.docker.internal:9000
+
+      PUBLICATION_WORK_DIR: /app/publication-work
+      PUBLICATION_CONTRACTS_DIR: /app/contracts/products
+
+      # Superadmin portal integration -- see /admin/lakehouse/pipelines.
+      PUBLICATION_INTERNAL_API_KEY: dev-internal-key-change-me-publication
+    ports:
+      # Host port 8091 (container listens on 8000): 8090 is data-lakehouse's
+      # own `api` service; every other port in the monorepo is already
+      # taken too (portal 3091, mongo 27025, data-exchange-service
+      # 5433/9000/9001/8080, data-lakehouse 5434/9010/9011/8090, this
+      # service's own postgres on 5436).
+      - "8091:8000"
+    volumes:
+      - ./src:/app/src
+      - ./config:/app/config
+      - ./contracts:/app/contracts
+      - ./sql:/app/sql
+      - ./scripts:/app/scripts
+      - ./tests:/app/tests
+      - publication-work:/app/publication-work
+    working_dir: /app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    command: ["-c", "uvicorn publication.api.app:app --host 0.0.0.0 --port 8000"]
+
+volumes:
+  publication-postgres-data:
+  publication-work:

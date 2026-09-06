@@ -31,7 +31,9 @@
       "Bash(node playwright-followup-test.mjs)",
       "Bash(npx tsx -e ' *)",
       "Bash(docker exec *)",
-      "Bash(docker compose *)"
+      "Bash(docker compose *)",
+      "Bash(.venv/bin/pip install *)",
+      "Bash(.venv/bin/ruff check *)"
     ],
     "additionalDirectories": [
       "/Users/ranjay.kumar/Documents/Ranjay/agentic-ai/react/cdep/src/app/api/downloads/[fileId]"

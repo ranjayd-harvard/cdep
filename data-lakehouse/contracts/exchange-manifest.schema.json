@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://lakehouse.local/contracts/exchange-manifest.schema.json",
+  "title": "Exchange Manifest",
+  "type": "object",
+  "required": ["manifestVersion", "exchange", "ownership", "dataProduct", "file"],
+  "additionalProperties": true,
+  "properties": {
+    "manifestVersion": { "type": "string" },
+    "exchange": {
+      "type": "object",
+      "required": ["exchangeId", "direction", "status"],
+      "properties": {
+        "exchangeId": { "type": "string", "minLength": 1 },
+        "direction": { "type": "string", "enum": ["INBOUND", "OUTBOUND"] },
+        "status": { "type": "string", "minLength": 1 }
+      }
+    },
+    "ownership": {
+      "type": "object",
+      "required": ["organizationId", "tenantId"],
+      "properties": {
+        "organizationId": { "type": "string", "minLength": 1 },
+        "tenantId": { "type": "string", "minLength": 1 }
+      }
+    },
+    "submittedBy": {
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" }
+      }
+    },
+    "dataProduct": {
+      "type": "object",
+      "required": ["dataProductId", "schemaVersion"],
+      "properties": {
+        "dataProductId": { "type": "string", "minLength": 1 },
+        "schemaVersion": { "type": ["string", "null"] }
+      }
+    },
+    "file": {
+      "type": "object",
+      "required": ["originalFilename", "format", "sizeBytes"],
+      "properties": {
+        "originalFilename": { "type": "string", "minLength": 1 },
+        "contentType": { "type": "string" },
+        "format": { "type": "string", "enum": ["CSV", "JSON", "PARQUET"] },
+        "sizeBytes": { "type": "integer", "minimum": 0 },
+        "checksumAlgorithm": { "type": "string" },
+        "checksum": { "type": "string" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "properties": {
+        "channel": { "type": "string" }
+      }
+    },
+    "timestamps": {
+      "type": "object",
+      "properties": {
+        "receivedAt": { "type": "string" }
+      }
+    }
+  }
+}

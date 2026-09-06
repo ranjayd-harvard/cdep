@@ -15,7 +15,7 @@ export default async function DashboardPage() {
 
   const [datasets, exchanges, notifications] = await Promise.all([
     services.datasets.getDatasets(tenant.tenantId),
-    services.exchanges.getExchanges(tenant.tenantId),
+    services.exchanges.getExchanges(tenant),
     services.notifications.getNotifications(tenant.tenantId),
   ]);
 

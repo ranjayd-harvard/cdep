@@ -1,0 +1,9 @@
+# Local-filesystem storage backend (no MinIO/S3 required).
+# Useful for quick unit tests or offline development.
+kind: local
+root: ./storage
+buckets:
+  exchange_inbound: exchange/inbound
+  bronze: lakehouse/bronze
+  silver: lakehouse/silver
+  gold: lakehouse/gold

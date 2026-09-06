@@ -13,7 +13,7 @@ interface ExchangeDetailPageProps {
 export default async function ExchangeDetailPage({ params }: ExchangeDetailPageProps) {
   const { exchangeId } = await params;
   const tenant = await requireTenantContext();
-  const exchange = await services.exchanges.getExchange(tenant.tenantId, exchangeId);
+  const exchange = await services.exchanges.getExchange(tenant, exchangeId);
 
   if (!exchange) {
     notFound();

@@ -16,6 +16,17 @@ const STATUS_MAP: Record<string, { label: string; color: BadgeColor }> = {
   active: { label: "Active", color: "green" },
   inactive: { label: "Inactive", color: "gray" },
   revoked: { label: "Revoked", color: "red" },
+  // Phase 3 pipeline statuses (lakehouse.pipelines.pipeline_status.PipelineStatus)
+  CREATED: { label: "Created", color: "gray" },
+  READING_SOURCE: { label: "Reading source", color: "yellow" },
+  TRANSFORMING: { label: "Transforming", color: "yellow" },
+  WRITING: { label: "Writing", color: "yellow" },
+  QUALITY_CHECK: { label: "Quality check", color: "yellow" },
+  SKIPPED_DUPLICATE: { label: "Skipped (duplicate)", color: "blue" },
+  // Quality rule severities (lakehouse.quality.rules)
+  ERROR: { label: "Error", color: "red" },
+  WARNING: { label: "Warning", color: "yellow" },
+  INFO: { label: "Info", color: "blue" },
 };
 
 export function StatusBadge({ status }: { status: string }) {

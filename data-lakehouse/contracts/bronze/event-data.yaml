@@ -1,0 +1,59 @@
+# Data contract for the "event-data" data product.
+# This is the start of the data-contract model that will later grow into
+# the Silver/Gold contract for this data product.
+
+dataProductId: event-data
+version: "1.0"
+owner: platform-data-team # placeholder; replace with real team ownership
+
+source:
+  formats:
+    - CSV
+    - JSON
+    - PARQUET
+
+bronze:
+  namespace: bronze
+  table: event_data
+
+csv:
+  header: true
+  delimiter: ","
+  encoding: UTF-8
+
+json:
+  # newline-delimited JSON (one record per line)
+  lines: true
+  encoding: UTF-8
+
+schema:
+  mode: PERMISSIVE # STRICT | PERMISSIVE
+  # Canonical Bronze types for event-data v1.0. Bronze does not rename
+  # business columns, but *does* coerce each declared field to this type
+  # regardless of source format (CSV text vs. JSON/Parquet native values) --
+  # this is what lets bronze.event_data stay one schema-consistent table no
+  # matter which format a given exchange arrived in (AGENTS.md section 21).
+  # A value that fails to coerce (e.g. non-numeric text in tickets_sold) is
+  # quarantined via the reject mechanism rather than silently dropped or
+  # defaulted (section 20/24) -- it is never a fatal ingestion error.
+  # Columns not listed here (schema drift) pass through with their
+  # source-observed type, subject to `mode` above.
+  fields:
+    - name: event_id
+      type: string
+      required: true
+    - name: venue_id
+      type: string
+      required: true
+    - name: event_date
+      type: string
+      required: true
+    - name: tickets_sold
+      type: long
+      required: false
+    - name: gross_revenue
+      type: double
+      required: false
+
+quality:
+  rejectUnreadableRecords: true

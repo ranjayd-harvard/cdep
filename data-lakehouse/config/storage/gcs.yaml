@@ -1,0 +1,20 @@
+# Future GCP deployment target. Not used locally.
+#
+# GCSStorage (src/lakehouse/storage/gcs_storage.py) implements the same
+# StorageClient interface as local/S3 — ingestion business logic does not
+# change when this backend is selected.
+kind: gcs
+project_id_env: GCP_PROJECT_ID
+credentials_env: GOOGLE_APPLICATION_CREDENTIALS
+buckets:
+  exchange_inbound: acme-exchange-inbound
+  bronze: acme-lakehouse-bronze
+  silver: acme-lakehouse-silver
+  gold: acme-lakehouse-gold
+
+catalog:
+  # Any Iceberg-compatible catalog reachable from GCP (e.g. a REST catalog
+  # backed by Cloud SQL, or a managed lakehouse catalog service).
+  type: rest
+  uri_env: LAKEHOUSE_CATALOG_REST_URI
+  warehouse: gs://acme-lakehouse-bronze/

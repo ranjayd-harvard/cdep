@@ -5,16 +5,18 @@ import { useSession } from "next-auth/react";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui";
 import { clientServices } from "@/services/client";
+import { toTenantContext } from "@/lib/client-tenant-context";
 
 export function DownloadButton({ fileId }: { fileId: string }) {
   const { data: session } = useSession();
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
 
   async function handleClick() {
-    if (!session?.user?.tenantId) return;
+    const context = toTenantContext(session?.user);
+    if (!context) return;
     setStatus("loading");
     try {
-      const url = await clientServices.downloads.getDownloadUrl(session.user.tenantId, fileId);
+      const url = await clientServices.downloads.getDownloadUrl(context, fileId);
       window.location.assign(url);
       setStatus("idle");
     } catch {

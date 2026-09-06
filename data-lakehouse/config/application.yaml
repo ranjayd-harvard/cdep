@@ -1,0 +1,36 @@
+# Application-level configuration for the local environment.
+# Values here are defaults; environment variables (see .env.example) always
+# take precedence — see src/lakehouse/config/settings.py.
+
+environment: local
+
+schema:
+  # STRICT   -> any schema mismatch fails ingestion
+  # PERMISSIVE -> additive, compatible fields may be accepted
+  mode: PERMISSIVE
+
+quality:
+  reject_unreadable_records: true
+
+exchange:
+  # mock -> read manifests/files from samples/ and local fixtures
+  # http -> call a running data-exchange-service instance
+  client: mock
+  allowed_ingestion_statuses:
+    - VALIDATED
+  required_direction: INBOUND
+
+catalog:
+  name: local
+  namespace_bronze: bronze
+  namespace_silver: silver
+  namespace_gold: gold
+
+partitioning:
+  # Bronze tables are partitioned by tenant + ingestion day. This keeps
+  # per-tenant scans cheap without over-partitioning by high-cardinality
+  # exchange_id or creating a directory-per-user layout (see README, section
+  # "Partitioning strategy").
+  bronze:
+    - tenant_id
+    - days(ingested_at)

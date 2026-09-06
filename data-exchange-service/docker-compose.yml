@@ -1,0 +1,94 @@
+name: data-exchange-service
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: exchange
+      POSTGRES_PASSWORD: exchange
+      POSTGRES_DB: exchange
+    ports:
+      # Host port 5433 (not 5432): avoids clashing with a locally-installed
+      # Postgres that may already be listening on the default port. The
+      # container's *internal* port (used by other services on this
+      # compose network, e.g. exchange-service's DATABASE_URL) is still 5432.
+      - "5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U exchange -d exchange"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  bucket-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://exchange:exchange@postgres:5432/exchange
+      OBJECT_STORAGE_ENDPOINT: http://minio:9000
+      OBJECT_STORAGE_PUBLIC_ENDPOINT: http://localhost:9000
+      OBJECT_STORAGE_REGION: us-east-1
+      OBJECT_STORAGE_ACCESS_KEY: minioadmin
+      OBJECT_STORAGE_SECRET_KEY: minioadmin
+      INBOUND_BUCKET: exchange-inbound
+      OUTBOUND_BUCKET: exchange-outbound
+    entrypoint: ["node", "dist/scripts/init-buckets.js"]
+    restart: "no"
+
+  exchange-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      NODE_ENV: development
+      PORT: 8080
+      DATABASE_URL: postgresql://exchange:exchange@postgres:5432/exchange
+      OBJECT_STORAGE_PROVIDER: s3
+      OBJECT_STORAGE_ENDPOINT: http://minio:9000
+      OBJECT_STORAGE_PUBLIC_ENDPOINT: http://localhost:9000
+      OBJECT_STORAGE_REGION: us-east-1
+      OBJECT_STORAGE_ACCESS_KEY: minioadmin
+      OBJECT_STORAGE_SECRET_KEY: minioadmin
+      INBOUND_BUCKET: exchange-inbound
+      OUTBOUND_BUCKET: exchange-outbound
+      SIGNED_UPLOAD_URL_TTL_SECONDS: 900
+      SIGNED_DOWNLOAD_URL_TTL_SECONDS: 300
+      MAX_UPLOAD_SIZE_BYTES: 5368709120
+      AUTH_MODE: development
+      INTERNAL_API_KEY: dev-internal-key-change-me
+      LOG_LEVEL: info
+    command: ["node", "dist/scripts/start.js"]
+
+volumes:
+  postgres-data:
+  minio-data:

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createFakeDb } from "@/test/fake-mongo";
+import { fakeTenantContext } from "@/test/fake-tenant-context";
 
 const { getDbMock } = vi.hoisted(() => ({ getDbMock: vi.fn() }));
 
@@ -27,7 +28,7 @@ describe("MongoDownloadService", () => {
     seed();
     const service = new MongoDownloadService();
 
-    const downloads = await service.getDownloads(TENANT_A);
+    const downloads = await service.getDownloads(fakeTenantContext(TENANT_A));
 
     expect(downloads).toHaveLength(1);
     expect(downloads[0]?.id).toBe("dl-a1");
@@ -37,7 +38,7 @@ describe("MongoDownloadService", () => {
     seed();
     const service = new MongoDownloadService();
 
-    const [download] = await service.getDownloads(TENANT_A);
+    const [download] = await service.getDownloads(fakeTenantContext(TENANT_A));
 
     expect(download).not.toHaveProperty("storageFileId");
     expect(download).not.toHaveProperty("tenantId");
@@ -47,7 +48,7 @@ describe("MongoDownloadService", () => {
     seed();
     const service = new MongoDownloadService();
 
-    const url = await service.getDownloadUrl(TENANT_A, "dl-a1");
+    const url = await service.getDownloadUrl(fakeTenantContext(TENANT_A), "dl-a1");
 
     expect(url).toMatch(/^\/api\/downloads\/dl-a1\/file\?token=[0-9a-f]{64}$/);
   });
@@ -56,6 +57,6 @@ describe("MongoDownloadService", () => {
     seed();
     const service = new MongoDownloadService();
 
-    await expect(service.getDownloadUrl(TENANT_A, "dl-b1")).rejects.toThrow();
+    await expect(service.getDownloadUrl(fakeTenantContext(TENANT_A), "dl-b1")).rejects.toThrow();
   });
 });

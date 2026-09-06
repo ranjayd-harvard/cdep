@@ -11,7 +11,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ fil
   const { fileId } = await params;
 
   try {
-    const url = await services.downloads.getDownloadUrl(ctx.tenant.tenantId, fileId);
+    const url = await services.downloads.getDownloadUrl(ctx.tenant, fileId);
     return NextResponse.json(url);
   } catch {
     return NextResponse.json({ error: "File not found." }, { status: 404 });
