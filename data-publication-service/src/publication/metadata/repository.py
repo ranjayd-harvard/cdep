@@ -37,6 +37,7 @@ class PublicationRunRow:
     artifact_count: int | None
     outbound_exchange_id: str | None
     idempotency_key: str | None
+    external_idempotency_key: str | None
     started_at: datetime | None
     completed_at: datetime | None
     error_code: str | None
@@ -64,6 +65,7 @@ class PublicationRepository:
         contract_version: str,
         idempotency_key: str,
         started_at: datetime,
+        external_idempotency_key: str | None = None,
     ) -> None:
         with self._engine.begin() as conn:
             conn.execute(
@@ -73,13 +75,13 @@ class PublicationRepository:
                         publication_id, organization_id, tenant_id,
                         data_product_id, product_version,
                         source_gold_table, source_gold_snapshot_id, source_pipeline_run_id,
-                        requested_format, contract_version, idempotency_key,
+                        requested_format, contract_version, idempotency_key, external_idempotency_key,
                         status, started_at, created_at, updated_at
                     ) VALUES (
                         :publication_id, :organization_id, :tenant_id,
                         :data_product_id, :product_version,
                         :source_gold_table, :source_gold_snapshot_id, :source_pipeline_run_id,
-                        :requested_format, :contract_version, :idempotency_key,
+                        :requested_format, :contract_version, :idempotency_key, :external_idempotency_key,
                         :status, :started_at, :now, :now
                     )
                     """
@@ -96,6 +98,7 @@ class PublicationRepository:
                     "requested_format": requested_format,
                     "contract_version": contract_version,
                     "idempotency_key": idempotency_key,
+                    "external_idempotency_key": external_idempotency_key,
                     "status": "CREATED",
                     "started_at": started_at,
                     "now": utcnow(),
@@ -272,6 +275,23 @@ class PublicationRepository:
                     "ORDER BY created_at DESC LIMIT 1"
                 ),
                 {"key": idempotency_key},
+            ).mappings().first()
+        return PublicationRunRow(**dict(row)) if row else None
+
+    def find_by_external_idempotency_key(self, external_idempotency_key: str) -> PublicationRunRow | None:
+        # Mirrors find_by_idempotency_key's status='READY' filter: a prior
+        # FAILED attempt under the same Scheduler execution key must not
+        # block a fresh retry attempt (Scheduler's RetryCoordinator is
+        # expected to reuse the same external_idempotency_key across
+        # attempts of one logical scheduled_execution) -- only a completed,
+        # successful run short-circuits a replay.
+        with self._engine.connect() as conn:
+            row = conn.execute(
+                sa.text(
+                    "SELECT * FROM publication.publication_runs WHERE external_idempotency_key = :key AND status = 'READY' "
+                    "ORDER BY created_at DESC LIMIT 1"
+                ),
+                {"key": external_idempotency_key},
             ).mappings().first()
         return PublicationRunRow(**dict(row)) if row else None
 

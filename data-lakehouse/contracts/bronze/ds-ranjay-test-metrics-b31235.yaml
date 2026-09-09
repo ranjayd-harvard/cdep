@@ -1,0 +1,45 @@
+# Data contract for the "ds-ranjay-test-metrics-b31235" data product (cdep
+# Dataset "Ranjay Test Metrics" -- see
+# data-exchange-service/TEST-DataProduct-onboarding.MD).
+dataProductId: ds-ranjay-test-metrics-b31235
+version: "1.0"
+owner: platform-data-team # placeholder; replace with real team ownership
+
+source:
+  formats:
+    - CSV
+    - JSON
+    - PARQUET
+
+bronze:
+  namespace: bronze
+  table: ranjay_test_metrics
+
+csv:
+  header: true
+  delimiter: ","
+  encoding: UTF-8
+
+json:
+  # newline-delimited JSON (one record per line)
+  lines: true
+  encoding: UTF-8
+
+schema:
+  mode: PERMISSIVE # STRICT | PERMISSIVE
+  fields:
+    - name: metric_id
+      type: string
+      required: true
+    - name: metric_label
+      type: string
+      required: true
+    - name: recorded_on
+      type: string
+      required: true
+    - name: metric_value
+      type: double
+      required: false
+
+quality:
+  rejectUnreadableRecords: true

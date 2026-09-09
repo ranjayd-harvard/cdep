@@ -11,6 +11,8 @@ import {
   Building2,
   Users,
   Layers,
+  Share2,
+  Boxes,
   type LucideIcon,
 } from "lucide-react";
 
@@ -24,6 +26,7 @@ export const PRIMARY_NAV: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Data Products", href: "/datasets", icon: Database },
   { label: "Entitlements", href: "/entitlements", icon: ShieldCheck },
+  { label: "Subscriptions", href: "/subscriptions", icon: Boxes },
   { label: "Exchanges", href: "/exchanges", icon: ArrowLeftRight },
   { label: "Upload Data", href: "/upload", icon: UploadCloud },
   { label: "Downloads", href: "/downloads", icon: DownloadCloud },
@@ -43,6 +46,8 @@ export const ADMIN_NAV: NavItem[] = [
   { label: "Overview", href: "/admin", icon: LayoutDashboard },
   { label: "Organizations", href: "/admin/organizations", icon: Building2 },
   { label: "Users", href: "/admin/users", icon: Users },
+  { label: "Data Products", href: "/admin/data-products", icon: Database },
+  { label: "Data Relationships", href: "/admin/data-relationships", icon: Share2 },
   { label: "Lakehouse Ingestion", href: "/admin/lakehouse", icon: Layers },
   { label: "Platform Settings", href: "/admin/settings", icon: Settings },
 ];

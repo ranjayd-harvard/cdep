@@ -72,7 +72,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           throw new EmailNotVerifiedError();
         }
 
-        if (user.status === PortalUserStatus.SUSPENDED) {
+        if (user.status !== PortalUserStatus.ACTIVE) {
           return null;
         }
 
@@ -104,7 +104,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       const existing = await findPortalUserByEmail(email);
       if (existing) {
-        return existing.status !== PortalUserStatus.SUSPENDED;
+        return existing.status === PortalUserStatus.ACTIVE;
       }
 
       const { allowSelfServeSignup } = await getPlatformSettings();

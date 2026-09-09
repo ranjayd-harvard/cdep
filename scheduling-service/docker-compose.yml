@@ -1,0 +1,73 @@
+name: scheduling-service
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: scheduling
+      POSTGRES_PASSWORD: scheduling
+      POSTGRES_DB: scheduling
+    ports:
+      # Host port 5439: 5432 (host default), 5433 (data-exchange-service),
+      # 5434 (data-lakehouse), 5435 (an unrelated local project), 5436
+      # (data-publication-service), 5437 (data-product-catalog-service),
+      # and 5438 (subscription-service) are already taken on this machine.
+      # Internal port stays 5432.
+      - "5439:5432"
+    volumes:
+      - scheduling-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scheduling -d scheduling"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  scheduling-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      # Host port 8094: 8080 (data-exchange-service), 8090 (data-lakehouse),
+      # 8091 (data-publication-service), 8092 (data-product-catalog-service),
+      # and 8093 (subscription-service) are already taken.
+      - "8094:8094"
+    environment:
+      NODE_ENV: development
+      PORT: 8094
+      DATABASE_URL: postgresql://scheduling:scheduling@postgres:5432/scheduling
+      AUTH_MODE: development
+      INTERNAL_API_TOKEN: dev-internal-key-change-me
+      # Catalog Service, Subscription Service, and Publication Service each
+      # run in their own isolated compose network on the host, reached the
+      # same way subscription-service reaches Catalog Service — see that
+      # service's own docker-compose.yml comment.
+      CATALOG_SERVICE_URL: http://host.docker.internal:8092
+      CATALOG_SERVICE_INTERNAL_API_KEY: dev-internal-key-change-me
+      CATALOG_SERVICE_TIMEOUT_SECONDS: 5
+      SUBSCRIPTION_SERVICE_URL: http://host.docker.internal:8093
+      SUBSCRIPTION_SERVICE_INTERNAL_API_KEY: dev-internal-key-change-me
+      SUBSCRIPTION_SERVICE_TIMEOUT_SECONDS: 5
+      PUBLICATION_SERVICE_URL: http://host.docker.internal:8091
+      PUBLICATION_SERVICE_INTERNAL_API_KEY: dev-internal-key-change-me-publication
+      PUBLICATION_SERVICE_TIMEOUT_SECONDS: 120
+      SCHEDULER_ENABLED: "true"
+      SCHEDULER_SCAN_INTERVAL_SECONDS: 20
+      SCHEDULER_RECONCILE_INTERVAL_SECONDS: 60
+      SCHEDULER_MAX_ATTEMPTS: 5
+      SCHEDULER_INITIAL_BACKOFF_SECONDS: 30
+      SCHEDULER_MAX_BACKOFF_SECONDS: 900
+      SCHEDULER_BACKOFF_MULTIPLIER: 2
+      SCHEDULER_BACKOFF_JITTER_RATIO: 0.2
+      SCHEDULER_MISSED_RUN_POLICY: RUN_LATEST
+      SCHEDULER_MISSED_RUN_GRACE_MINUTES: 360
+      SCHEDULER_CRON_MIN_INTERVAL_SECONDS: 60
+      LOG_LEVEL: info
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["node", "dist/scripts/start.js"]
+
+volumes:
+  scheduling-postgres-data:

@@ -6,6 +6,7 @@ export * from "./user";
 export * from "./platform-settings";
 export * from "./data-product";
 export * from "./dataset";
+export * from "./data-product-dataset";
 export * from "./entitlement";
 export * from "./exchange";
 export * from "./notification";

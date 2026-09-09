@@ -7,6 +7,7 @@ import type {
   OrganizationInvitationService,
   OrganizationMembershipService,
   OrganizationService,
+  PipelineJobAdminService,
   PlatformSettingsService,
   PublicationAdminService,
   TenantService,
@@ -35,6 +36,7 @@ import {
 } from "@/services/exchange-api";
 import { LakehouseAdminApiService, UnavailableLakehouseAdminService } from "@/services/lakehouse-admin";
 import { PublicationAdminApiService, UnavailablePublicationAdminService } from "@/services/publication-admin";
+import { PipelineJobAdminApiService, UnavailablePipelineJobAdminService } from "@/services/pipeline-job-admin";
 
 export interface ServiceRegistry extends ClientServiceRegistry {
   organizations: OrganizationService;
@@ -48,6 +50,7 @@ export interface ServiceRegistry extends ClientServiceRegistry {
   apiAccess: ApiAccessService;
   lakehouseAdmin: LakehouseAdminService;
   publicationAdmin: PublicationAdminService;
+  pipelineJobAdmin: PipelineJobAdminService;
 }
 
 /**
@@ -114,6 +117,9 @@ function createServices(): ServiceRegistry {
     publicationAdmin: env.publicationServiceEnabled
       ? new PublicationAdminApiService()
       : new UnavailablePublicationAdminService(),
+    pipelineJobAdmin: env.exchangeServiceEnabled
+      ? new PipelineJobAdminApiService()
+      : new UnavailablePipelineJobAdminService(),
   };
 }
 
@@ -131,6 +137,7 @@ export type {
   OrganizationInvitationService,
   OrganizationMembershipService,
   OrganizationService,
+  PipelineJobAdminService,
   PlatformSettingsService,
   PublicationAdminService,
   TenantService,

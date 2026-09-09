@@ -1,0 +1,50 @@
+export type ErrorCode =
+  | "VALIDATION_ERROR"
+  | "UNAUTHENTICATED"
+  | "FORBIDDEN"
+  | "PRODUCT_NOT_FOUND"
+  | "VERSION_NOT_FOUND"
+  | "CONTRACT_NOT_FOUND"
+  | "DOMAIN_NOT_FOUND"
+  | "OWNER_NOT_FOUND"
+  | "CONTRACT_INVALID"
+  | "CONTRACT_ALREADY_REGISTERED"
+  | "BREAKING_CHANGE_REQUIRES_MAJOR_VERSION"
+  | "VERSION_ALREADY_EXISTS"
+  | "VERSION_NOT_ACTIVATABLE"
+  | "VERSION_NOT_RETIRABLE"
+  | "API_DELIVERY_NOT_CONFIGURED"
+  | "CONFLICT"
+  | "INTERNAL_ERROR";
+
+const STATUS_BY_CODE: Record<ErrorCode, number> = {
+  VALIDATION_ERROR: 400,
+  UNAUTHENTICATED: 401,
+  FORBIDDEN: 403,
+  PRODUCT_NOT_FOUND: 404,
+  VERSION_NOT_FOUND: 404,
+  CONTRACT_NOT_FOUND: 404,
+  DOMAIN_NOT_FOUND: 404,
+  OWNER_NOT_FOUND: 404,
+  CONTRACT_INVALID: 422,
+  CONTRACT_ALREADY_REGISTERED: 200, // idempotent replay — not an error (spec §17)
+  BREAKING_CHANGE_REQUIRES_MAJOR_VERSION: 422,
+  VERSION_ALREADY_EXISTS: 409,
+  VERSION_NOT_ACTIVATABLE: 409,
+  VERSION_NOT_RETIRABLE: 409,
+  API_DELIVERY_NOT_CONFIGURED: 422,
+  CONFLICT: 409,
+  INTERNAL_ERROR: 500,
+};
+
+export class AppError extends Error {
+  readonly code: ErrorCode;
+  readonly statusCode: number;
+
+  constructor(code: ErrorCode, message: string) {
+    super(message);
+    this.name = "AppError";
+    this.code = code;
+    this.statusCode = STATUS_BY_CODE[code];
+  }
+}

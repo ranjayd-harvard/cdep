@@ -1,0 +1,65 @@
+# Publication contract for the synthetic "ranjay-test-metric-summary" Gold Data
+# Product -- see data-exchange-service/TEST-DataProduct-onboarding.MD for
+# the full onboarding runbook this is a worked example of. dataProduct.id
+# must exactly match data-lakehouse's pipeline_runs.data_product_id for the
+# completed SILVER_TO_GOLD run (see registry.py's SILVER_TO_GOLD_PIPELINES
+# key "ranjay-test-metric-summary").
+
+dataProduct:
+  id: ranjay-test-metric-summary
+  name: Ranjay Test Metric Summary
+  version: "1.0"
+  owner: Platform Test
+
+source:
+  table: gold.ranjay_test_metric_summary
+
+grain:
+  - metric_id
+
+tenantScope:
+  organizationColumn: organization_id
+  tenantColumn: tenant_id
+
+publishedSchema:
+  - name: metric_id
+    source: metric_id
+    type: string
+    required: true
+  - name: metric_label
+    source: metric_label
+    type: string
+    required: true
+  - name: recorded_on
+    source: recorded_on
+    type: date
+    required: true
+  - name: metric_value
+    source: metric_value
+    type: "decimal(18,2)"
+    required: false
+  - name: metric_value_doubled
+    source: metric_value_doubled
+    type: "decimal(18,2)"
+    required: false
+
+formats:
+  - PARQUET
+  - CSV
+
+defaultFormat: PARQUET
+
+publication:
+  filenamePattern: "ranjay-test-metric-summary-{date}-{publicationId}"
+  compression:
+    parquet: snappy
+    csv: gzip
+  expirationHours: 168
+
+quality:
+  verifySchema: true
+  verifyRecordCount: true
+  requireNonEmpty: true
+  enforceGrain: true
+
+masking: {}

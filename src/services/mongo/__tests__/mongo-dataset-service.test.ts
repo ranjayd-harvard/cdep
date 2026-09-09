@@ -19,8 +19,16 @@ function seed() {
       { tenantId: TENANT_B, dataProductId: "dp-b", status: "ACTIVE" },
     ],
     datasets: [
-      { _id: "ds-a", dataProductId: "dp-a", displayName: "A-only dataset" },
-      { _id: "ds-b", dataProductId: "dp-b", displayName: "B-only dataset" },
+      { _id: "ds-a", displayName: "A-only dataset" },
+      { _id: "ds-b", displayName: "B-only dataset" },
+      { _id: "ds-shared", displayName: "Shared dataset" },
+    ],
+    dataProductDatasets: [
+      { _id: "dpd-1", dataProductId: "dp-a", datasetId: "ds-a" },
+      { _id: "dpd-2", dataProductId: "dp-b", datasetId: "ds-b" },
+      // ds-shared is associated with both dp-a and dp-b.
+      { _id: "dpd-3", dataProductId: "dp-a", datasetId: "ds-shared" },
+      { _id: "dpd-4", dataProductId: "dp-b", datasetId: "ds-shared" },
     ],
   });
   getDbMock.mockResolvedValue(db);
@@ -33,8 +41,7 @@ describe("MongoDatasetService", () => {
 
     const datasets = await service.getDatasets(TENANT_A);
 
-    expect(datasets).toHaveLength(1);
-    expect(datasets[0]?.id).toBe("ds-a");
+    expect(datasets.map((d) => d.id).sort()).toEqual(["ds-a", "ds-shared"]);
   });
 
   it("returns null for a dataset that exists but belongs to another tenant's entitlement", async () => {
@@ -55,6 +62,17 @@ describe("MongoDatasetService", () => {
     const dataset = await service.getDataset(TENANT_B, "ds-b");
 
     expect(dataset?.id).toBe("ds-b");
+  });
+
+  it("returns a dataset entitled via any one of several associated data products", async () => {
+    seed();
+    const service = new MongoDatasetService();
+
+    const forTenantA = await service.getDataset(TENANT_A, "ds-shared");
+    const forTenantB = await service.getDataset(TENANT_B, "ds-shared");
+
+    expect(forTenantA?.id).toBe("ds-shared");
+    expect(forTenantB?.id).toBe("ds-shared");
   });
 
   it("returns null for a dataset id that doesn't exist at all", async () => {

@@ -15,7 +15,6 @@ export const MOCK_DATA_PRODUCTS: DataProduct[] = [
     domain: "Customer",
     owner: "Customer Data Platform Team",
     status: DataProductStatus.ACTIVE,
-    datasetIds: ["ds-customer-360", "ds-transaction-detail"],
   },
   {
     id: "dp-events-operations",
@@ -25,7 +24,6 @@ export const MOCK_DATA_PRODUCTS: DataProduct[] = [
     domain: "Events",
     owner: "Events Analytics Team",
     status: DataProductStatus.ACTIVE,
-    datasetIds: ["ds-event-performance", "ds-venue-activity", "ds-inventory-availability"],
   },
   {
     id: "dp-commerce-finance",
@@ -35,6 +33,5 @@ export const MOCK_DATA_PRODUCTS: DataProduct[] = [
     domain: "Finance",
     owner: "Finance Data Team",
     status: DataProductStatus.ACTIVE,
-    datasetIds: ["ds-product-catalog", "ds-settlement-summary", "ds-location-master"],
   },
 ];

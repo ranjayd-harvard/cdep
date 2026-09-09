@@ -38,6 +38,19 @@ export async function getEntitlements(tenantId: string): Promise<Entitlement[]> 
   return docs.map(toEntitlement);
 }
 
+/**
+ * Admin Console only: every Entitlement across every tenant that grants
+ * access to one Data Product — "which tenants can see this product, and
+ * why." Deliberately bypasses `TenantScopedCollection` (there is no
+ * single tenant to scope to here), the same way `listAllDataProducts`
+ * bypasses per-tenant entitlement filtering for the catalog.
+ */
+export async function listEntitlementsForDataProduct(dataProductId: string): Promise<Entitlement[]> {
+  const db = await getDb();
+  const docs = await db.collection<EntitlementDocument>("entitlements").find({ dataProductId }).toArray();
+  return docs.map(toEntitlement);
+}
+
 export async function getEntitledDataProductIds(tenantId: string): Promise<string[]> {
   const db = await getDb();
   const entitlements = getTenantScopedCollection<EntitlementDocument>(db, "entitlements", tenantId);
@@ -53,6 +66,24 @@ export async function isEntitled(tenantId: string, dataProductId: string): Promi
 }
 
 /**
+ * A Dataset can belong to several Data Products (see
+ * `src/lib/data-product-dataset-directory.ts`), so visibility is "entitled
+ * to at least one of them" rather than a single id check.
+ */
+export async function isEntitledToAny(tenantId: string, dataProductIds: string[]): Promise<boolean> {
+  if (dataProductIds.length === 0) {
+    return false;
+  }
+  const db = await getDb();
+  const entitlements = getTenantScopedCollection<EntitlementDocument>(db, "entitlements", tenantId);
+  const doc = await entitlements.findOne({
+    dataProductId: { $in: dataProductIds },
+    status: EntitlementStatus.ACTIVE,
+  });
+  return doc !== null;
+}
+
+/**
  * Grants a tenant access to a data product. Writes go through the same
  * `TenantScopedCollection` as the reads above, so an entitlement can
  * never be created under a `tenantId` other than the one this call was
@@ -62,6 +93,7 @@ export async function createEntitlement(
   tenantId: string,
   dataProductId: string,
   grantedBy: string,
+  expiresAt: string | null = null,
 ): Promise<Entitlement> {
   const db = await getDb();
   const entitlements = getTenantScopedCollection<EntitlementDocument>(db, "entitlements", tenantId);
@@ -72,10 +104,21 @@ export async function createEntitlement(
     status: EntitlementStatus.ACTIVE,
     grantedAt: new Date().toISOString(),
     grantedBy,
-    expiresAt: null,
+    expiresAt,
   };
   await entitlements.insertOne(doc);
   return toEntitlement(doc);
+}
+
+/** Edits an existing Entitlement's expiration date without changing its status. */
+export async function setEntitlementExpiry(
+  tenantId: string,
+  entitlementId: string,
+  expiresAt: string | null,
+): Promise<void> {
+  const db = await getDb();
+  const entitlements = getTenantScopedCollection<EntitlementDocument>(db, "entitlements", tenantId);
+  await entitlements.updateOne({ _id: entitlementId }, { $set: { expiresAt } });
 }
 
 /**

@@ -12,7 +12,10 @@ from publication.api.schemas import (
     TriggerPublishIn,
 )
 from publication.common.errors import PublicationError
-from publication.lakehouse.gold_metadata_reader import resolve_gold_ready_by_pipeline_run_id
+from publication.lakehouse.gold_metadata_reader import (
+    resolve_gold_ready_by_pipeline_run_id,
+    resolve_latest_gold_ready_by_scope,
+)
 from publication.metadata.engine import get_engine
 from publication.metadata.repository import PublicationRepository, PublicationRunRow
 from publication.models.publication import PublicationOutcome
@@ -83,11 +86,36 @@ def get_publication(publication_id: str) -> PublicationRunDetailOut:
 
 @router.post("/internal/v1/publications", response_model=PublicationOutcomeOut)
 def trigger_publish(body: TriggerPublishIn, request: Request) -> PublicationOutcomeOut:
+    scope_fields = (body.organization_id, body.tenant_id, body.data_product_id, body.product_version)
+    by_scope = any(f is not None for f in scope_fields)
+
+    if body.pipeline_run_id and by_scope:
+        raise HTTPException(
+            status_code=400,
+            detail={"error_code": "AMBIGUOUS_TRIGGER", "message": "Provide either pipeline_run_id or the organization/tenant/data_product/product_version scope, not both."},
+        )
+    if not body.pipeline_run_id and not all(f is not None for f in scope_fields):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": "INVALID_TRIGGER_REQUEST",
+                "message": "Provide pipeline_run_id, or all of organization_id/tenant_id/data_product_id/product_version.",
+            },
+        )
+
     try:
-        gold_ready = resolve_gold_ready_by_pipeline_run_id(body.pipeline_run_id)
+        if body.pipeline_run_id:
+            gold_ready = resolve_gold_ready_by_pipeline_run_id(body.pipeline_run_id)
+        else:
+            gold_ready = resolve_latest_gold_ready_by_scope(
+                organization_id=body.organization_id,  # type: ignore[arg-type]
+                tenant_id=body.tenant_id,  # type: ignore[arg-type]
+                data_product_id=body.data_product_id,  # type: ignore[arg-type]
+                product_version=body.product_version,  # type: ignore[arg-type]
+            )
     except PublicationError as exc:
-        # GoldReadyNotFoundError -> the pipeline_run_id given isn't a
-        # COMPLETED SILVER_TO_GOLD run yet (client-fixable precondition,
+        # GoldReadyNotFoundError -> no COMPLETED SILVER_TO_GOLD run exists
+        # yet for the given identifier/scope (client-fixable precondition,
         # not a server bug) -- 404, mirroring data-lakehouse's
         # trigger_ingestion/trigger_bronze_to_silver precedent.
         raise HTTPException(
@@ -95,5 +123,10 @@ def trigger_publish(body: TriggerPublishIn, request: Request) -> PublicationOutc
         ) from exc
 
     service = request.app.state.publication_service
-    outcome = service.publish(gold_ready, requested_format=body.format, republish=body.republish)
+    outcome = service.publish(
+        gold_ready,
+        requested_format=body.format,
+        republish=body.republish,
+        external_idempotency_key=body.external_idempotency_key,
+    )
     return _outcome_out(outcome)

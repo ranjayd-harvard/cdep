@@ -5,8 +5,11 @@ The **Exchange Control Plane** for the Customer Data Exchange Platform. It manag
 manifests, validation, audit trail, and short-lived signed URLs into object storage.
 
 It is **not** a data warehouse and does not transform business data. It does not implement the
-Bronze/Silver/Gold medallion pipeline — that is a future consumer of this service's
-`EXCHANGE_READY_FOR_INGESTION` signal.
+Bronze/Silver/Gold medallion pipeline itself — `data-lakehouse` does, as a real (no longer
+future) consumer of this service's `EXCHANGE_READY_FOR_INGESTION` signal. This service can also
+*trigger* that pipeline (and the subsequent real Gold→Outbound publish via
+`data-publication-service`) for queued jobs via its own `src/pipeline-worker/` — see "Two publish
+paths" under Architectural decisions below.
 
 This service is wired up to the `cdep` portal one directory up — see
 [`../docs/exchange-service-integration.md`](../docs/exchange-service-integration.md)
@@ -45,12 +48,20 @@ this README stays focused on this service in isolation.
                  │ validations     │ │ files                │
                  └─────────────────┘ └─────────┬──────────┘
                                               │
-                                      FUTURE  │
+                                   src/pipeline-worker/
+                                    (queued jobs only —
+                                     see below) │
                                               ▼
                               ┌─────────────────────────┐
                               │ Bronze → Silver → Gold   │
+                              │ (data-lakehouse, real)   │
                               └─────────────────────────┘
 ```
+
+This service does not itself implement Bronze/Silver/Gold — it *triggers*
+data-lakehouse's real pipeline (and then data-publication-service's real
+publish step) for queued jobs, via `src/pipeline-worker/`. See "Two publish
+paths" under Architectural decisions below.
 
 ### Multi-tenant security model
 
@@ -178,7 +189,7 @@ data_products
       └──── exchanges
 ```
 
-Migrations live in `migrations/001`–`008` and are applied in order by `npm run migrate` /
+Migrations live in `migrations/001`–`009` and are applied in order by `npm run migrate` /
 `scripts/start.ts` (idempotent — tracked in `public.exchange_schema_migrations`).
 
 Every tenant-owned repository query in `src/modules/exchanges/exchange.repository.ts` requires
@@ -199,8 +210,12 @@ would set `app.organization_id` / `app.tenant_id` per transaction to make it loa
 | GET | `/v1/exchanges/{exchangeId}/validation` | JWT | Customer-safe validation result |
 | GET | `/v1/data-products` | JWT | List active data products |
 | POST | `/v1/downloads/{exchangeId}/url` | JWT | Signed download URL for a READY outbound exchange |
-| POST | `/internal/v1/publications` | Internal API key | Simulates a future Gold→Outbound publication |
-| GET | `/internal/v1/exchanges/{exchangeId}/manifest` | Internal API key | Manifest + data-file storage coordinates, for the Phase 2 `data-lakehouse` ingestion pipeline (see its `HttpExchangeServiceClient`) |
+| POST | `/internal/v1/publications` | Internal API key | Fixture-content publish simulator — cdep's upload-triggered demo path when `DEMO_FIXTURE_PUBLISH_ENABLED=true` (default) |
+| POST | `/internal/v1/outbound-publications` | Internal API key | Real Gold→Outbound handoff from data-publication-service (prepare + signed upload URL) |
+| POST | `/internal/v1/outbound-publications/{exchangeId}/complete` | Internal API key | Verifies the uploaded artifact and marks the OUTBOUND exchange READY |
+| POST | `/internal/v1/outbound-publications/{exchangeId}/fail` | Internal API key | Marks an OUTBOUND publication FAILED |
+| POST | `/internal/v1/pipeline-jobs` | Internal API key | Enqueues a Bronze→Silver→Gold→Publish pipeline run (cdep's upload path when `DEMO_FIXTURE_PUBLISH_ENABLED=false`); processed asynchronously by `src/pipeline-worker/`, not this request |
+| GET | `/internal/v1/exchanges/{exchangeId}/manifest` | Internal API key | Manifest + data-file storage coordinates, for the `data-lakehouse` ingestion pipeline (see its `HttpExchangeServiceClient`) |
 | GET | `/internal/v1/exchanges` | Internal API key | Cross-tenant exchange list (no org/tenant scoping), for the portal's superadmin `/admin/lakehouse` page |
 | GET | `/health/live` | none | Process liveness |
 | GET | `/health/ready` | none | PostgreSQL + object storage readiness |
@@ -260,6 +275,14 @@ curl -s -X POST http://localhost:8080/internal/v1/publications \
 # 5. Request a signed download URL
 curl -s -X POST http://localhost:8080/v1/downloads/<exchangeId>/url \
   -H "Authorization: Bearer $DEV_TOKEN"
+
+# 6. Enqueue a real pipeline run instead (what cdep calls when
+#    DEMO_FIXTURE_PUBLISH_ENABLED=false, in place of step 4). Processed
+#    asynchronously by src/pipeline-worker/, not this request — see
+#    PIPELINE_WORKER_POLL_INTERVAL_MS.
+curl -s -X POST http://localhost:8080/internal/v1/pipeline-jobs \
+  -H "x-internal-api-key: dev-internal-key-change-me" -H "Content-Type: application/json" \
+  -d '{"organizationId":"org-vobis-org-722aea","tenantId":"tenant-default-47d849","dataProductId":"event-performance","exchangeId":"<exchangeId from step 1>"}'
 ```
 
 ## Testing
@@ -304,14 +327,24 @@ rejection, checksum metadata, and health checks.
 - **No identity provider.** `AUTH_MODE=development` decodes (does not verify) a token shaped
   like the real claims; `AUTH_MODE=oidc` is stubbed to fail closed until a real JWKS verifier is
   wired in. Refused at boot in production if still set to `development`.
+- **Two independent publish paths, chosen by the caller.** `/internal/v1/publications` (fixture
+  content, synchronous) and `/internal/v1/pipeline-jobs` → `src/pipeline-worker/` (real
+  Bronze→Silver→Gold→Publish, asynchronous) both produce an OUTBOUND exchange but are not layered
+  on top of each other — cdep picks one per upload via its own `DEMO_FIXTURE_PUBLISH_ENABLED` flag.
+  See `../docs/pipeline-job-queue-design.md` for the full design record.
+- **The pipeline worker is a single poll loop, not a distributed queue.** `claimNextPendingJob`'s
+  `FOR UPDATE SKIP LOCKED` makes it safe to run more than one worker process, but only one process
+  is started today (from `server.ts`, gated on `LAKEHOUSE_SERVICE_URL`/`PUBLICATION_SERVICE_URL`
+  both being set). A failed job is left `FAILED` for manual inspection — no retry/backoff yet.
 
 ## Remaining future integration points
 
 - Real OIDC/JWKS verification for `AUTH_MODE=oidc`.
 - `IngestionNotifier` adapter beyond `LoggingIngestionNotifier` (Kafka/EventBridge/Pub-Sub/etc.)
   consuming `EXCHANGE_READY_FOR_INGESTION`.
-- A real Gold publication pipeline calling `POST /internal/v1/publications` in place of the
-  local fixture generator in `src/modules/publications/publication.service.ts`.
+- Retry/backoff for `FAILED` pipeline_jobs rows, and an admin UI to list/re-enqueue them
+  (currently DB-inspection only — see `src/pipeline-worker/` and
+  `../docs/pipeline-job-queue-design.md`).
 - A scheduler invoking `reconcileOrphanExchanges()` periodically.
 - `FORCE ROW LEVEL SECURITY` plus a low-privilege application DB role, once a connection-scoped
   middleware sets `app.organization_id`/`app.tenant_id` per request.

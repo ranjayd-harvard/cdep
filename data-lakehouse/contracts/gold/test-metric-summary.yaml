@@ -1,0 +1,78 @@
+# Gold Data Product contract for "test-metric-summary".
+# Synthetic test data product used to validate onboarding a brand-new data
+# product end-to-end -- see
+# data-exchange-service/TEST-DataProduct-onboarding.MD.
+
+dataProduct:
+  id: test-metric-summary
+  name: Test Metric Summary
+  version: "1.0"
+  owner: Platform Test
+  description: >
+    Business-ready test metric data for entitled consumers, derived from
+    silver.test_metric.
+
+source:
+  table: silver.test_metric
+
+grain: "One row per organization_id, tenant_id and metric_id."
+
+keys:
+  - organization_id
+  - tenant_id
+  - metric_id
+
+schema:
+  metric_id:
+    type: string
+    required: true
+  metric_label:
+    type: string
+    required: true
+  recorded_on:
+    type: date
+    required: true
+  metric_value:
+    type: decimal(18,2)
+    required: false
+  metric_value_doubled:
+    type: decimal(18,2)
+    required: false
+
+sla:
+  freshnessMinutes: 240
+
+quality:
+  minimumCompletenessPercent: 99
+  rules:
+    - name: metric_id_complete
+      type: not_null
+      column: metric_id
+      severity: ERROR
+
+    - name: metric_label_complete
+      type: not_null
+      column: metric_label
+      severity: ERROR
+
+    - name: recorded_on_complete
+      type: not_null
+      column: recorded_on
+      severity: ERROR
+
+    - name: metric_value_non_negative
+      type: min
+      column: metric_value
+      value: 0
+      severity: ERROR
+
+  policy:
+    errorThresholdPercent: 1.0
+    onFailure:
+      quarantineInvalidRecords: true
+      failPipeline: false
+
+publication:
+  formats:
+    - PARQUET
+    - CSV

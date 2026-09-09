@@ -73,7 +73,35 @@ class PublicationService:
         *,
         requested_format: str | None = None,
         republish: bool = False,
+        external_idempotency_key: str | None = None,
     ) -> PublicationOutcome:
+        # Phase 7 cross-service idempotency check -- checked first and
+        # independent of `republish`/the internal gold_ready-based
+        # idempotency_key below. A Scheduler retry after a lost response
+        # must always short-circuit here rather than re-running publish
+        # work, even if a new Gold snapshot landed between attempts.
+        if external_idempotency_key:
+            existing = self._repo.find_by_external_idempotency_key(external_idempotency_key)
+            if existing:
+                log.info(
+                    "publication.skipped_duplicate_external",
+                    publication_id=existing.publication_id,
+                    external_idempotency_key=external_idempotency_key,
+                )
+                return PublicationOutcome(
+                    publication_id=existing.publication_id,
+                    status=PublicationStatus.SKIPPED_DUPLICATE.value,
+                    organization_id=existing.organization_id,
+                    tenant_id=existing.tenant_id,
+                    data_product_id=existing.data_product_id,
+                    product_version=existing.product_version,
+                    source_gold_table=existing.source_gold_table,
+                    source_gold_snapshot_id=existing.source_gold_snapshot_id,
+                    output_record_count=existing.output_record_count or 0,
+                    artifact_count=existing.artifact_count or 0,
+                    outbound_exchange_id=existing.outbound_exchange_id,
+                )
+
         contract = load_publication_contract(gold_ready.data_product_id)
         validate_gold_ready_against_contract(gold_ready, contract)
 
@@ -141,6 +169,7 @@ class PublicationService:
             contract_version=contract.version,
             idempotency_key=idempotency_key,
             started_at=utcnow(),
+            external_idempotency_key=external_idempotency_key,
         )
 
         try:

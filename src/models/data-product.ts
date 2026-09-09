@@ -20,5 +20,4 @@ export interface DataProduct {
   domain: string;
   owner: string;
   status: DataProductStatus;
-  datasetIds: string[];
 }

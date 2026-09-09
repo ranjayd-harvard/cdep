@@ -5,6 +5,8 @@ import { listPortalUsersByOrganization } from "@/lib/user-directory";
 import {
   PageHeader,
   Card,
+  CardHeader,
+  CardTitle,
   CardContent,
   Table,
   TableHead,
@@ -16,6 +18,7 @@ import {
   Button,
 } from "@/components/ui";
 import { setOrganizationStatus } from "./actions";
+import { CreateOrganizationForm } from "./create-organization-form";
 
 export default async function AdminOrganizationsPage() {
   await requireSuperuserContext();
@@ -34,6 +37,15 @@ export default async function AdminOrganizationsPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Organizations" description="Every customer on the platform." />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Create Organization</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <CreateOrganizationForm />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent className="p-0">

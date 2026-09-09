@@ -33,3 +33,31 @@ export async function requireSuperuserContext(): Promise<AdminContext> {
     email: session.user.email ?? "",
   };
 }
+
+export type ApiAdminResult = { ok: true; admin: AdminContext } | { ok: false; status: 401 | 403 };
+
+/**
+ * The Route Handler equivalent of `requireSuperuserContext()` — mirrors
+ * `requireApiTenantContext` (`src/lib/api-auth.ts`): a Route Handler can't
+ * `redirect()` a `fetch()` caller usefully, so this returns a discriminated
+ * result for the caller to turn into a `NextResponse` instead.
+ */
+export async function requireApiSuperuserContext(): Promise<ApiAdminResult> {
+  const session = await auth();
+  if (!session?.user) {
+    return { ok: false, status: 401 };
+  }
+
+  if (session.user.role !== UserRole.SUPERUSER) {
+    return { ok: false, status: 403 };
+  }
+
+  return {
+    ok: true,
+    admin: {
+      userId: session.user.id,
+      name: session.user.name ?? "",
+      email: session.user.email ?? "",
+    },
+  };
+}

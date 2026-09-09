@@ -4,6 +4,7 @@ import type { TenantContext } from "@/lib/tenant";
 import { env } from "@/config/env";
 import {
   completeUpload,
+  enqueuePipelineJob,
   getExchange,
   getExchangeValidation,
   initiateUpload,
@@ -63,7 +64,7 @@ export class ExchangeApiUploadService implements UploadService {
         .catch(() => "File failed validation.");
     } else if (status === UploadStatus.COMPLETED) {
       message = "File processed successfully.";
-      await this.publishProcessedOutput(context, request);
+      await this.publishProcessedOutput(context, request, initiated.exchangeId);
     }
 
     return {
@@ -77,24 +78,46 @@ export class ExchangeApiUploadService implements UploadService {
   }
 
   /**
-   * Mirrors what `MongoUploadService` fakes today (see that file's own
-   * comment): with no real Bronze -> Silver -> Gold pipeline, "the
-   * processed output available for download" is a stand-in, not a
-   * transform of the actual uploaded bytes — data-exchange-service's
-   * `/internal/v1/publications` fixture endpoint plays that role here
-   * instead of echoing the upload. Best-effort: a failure here must not
-   * fail the upload itself (the upload genuinely succeeded), so this
-   * only logs.
+   * Two mutually exclusive ways to make "processed output" show up as an
+   * OUTBOUND exchange after a completed upload, chosen by
+   * `env.demoFixturePublishEnabled`:
+   *
+   * - true (default): mirrors what `MongoUploadService` fakes today (see
+   *   that file's own comment) — data-exchange-service's
+   *   `/internal/v1/publications` fixture endpoint stands in for the real
+   *   Bronze -> Silver -> Gold pipeline, echoing a small deterministic
+   *   sample instead of a transform of the actual uploaded bytes.
+   * - false: enqueues a real pipeline job (`/internal/v1/pipeline-jobs`)
+   *   instead. data-exchange-service's own worker decides when to run the
+   *   real Bronze -> Silver -> Gold -> Publish chain and produces a genuine
+   *   OUTBOUND exchange from real Gold output — on its own schedule, not
+   *   synchronously with this upload request.
+   *
+   * Best-effort either way: a failure here must not fail the upload itself
+   * (the upload genuinely succeeded), so this only logs.
    */
-  private async publishProcessedOutput(context: TenantContext, request: UploadRequest): Promise<void> {
+  private async publishProcessedOutput(
+    context: TenantContext,
+    request: UploadRequest,
+    exchangeId: string,
+  ): Promise<void> {
     if (!env.exchangeServiceInternalApiKey) return;
     try {
-      await publishFixture({
-        organizationId: context.organizationId,
-        tenantId: context.tenantId,
-        dataProductId: request.datasetId,
-        filename: request.filename,
-      });
+      if (env.demoFixturePublishEnabled) {
+        await publishFixture({
+          organizationId: context.organizationId,
+          tenantId: context.tenantId,
+          dataProductId: request.datasetId,
+          filename: request.filename,
+        });
+      } else {
+        await enqueuePipelineJob({
+          organizationId: context.organizationId,
+          tenantId: context.tenantId,
+          dataProductId: request.datasetId,
+          exchangeId,
+        });
+      }
     } catch (err) {
       console.warn("[ExchangeApiUploadService] publishProcessedOutput failed (non-fatal):", err);
     }

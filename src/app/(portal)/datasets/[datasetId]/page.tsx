@@ -19,7 +19,10 @@ export default async function DatasetDetailPage({ params }: DatasetDetailPagePro
     notFound();
   }
 
-  const dataProduct = await services.dataProducts.getDataProduct(tenant.tenantId, dataset.dataProductId);
+  const dataProductIds = await services.datasets.listDataProductIdsForDataset(datasetId);
+  const dataProducts = (
+    await Promise.all(dataProductIds.map((id) => services.dataProducts.getDataProduct(tenant.tenantId, id)))
+  ).filter((dataProduct): dataProduct is NonNullable<typeof dataProduct> => dataProduct !== null);
 
   return (
     <div className="flex flex-col gap-6">
@@ -37,7 +40,7 @@ export default async function DatasetDetailPage({ params }: DatasetDetailPagePro
           actions={<StatusBadge status={dataset.status} />}
         />
       </div>
-      <DatasetDetail dataset={dataset} dataProduct={dataProduct} />
+      <DatasetDetail dataset={dataset} dataProducts={dataProducts} />
     </div>
   );
 }

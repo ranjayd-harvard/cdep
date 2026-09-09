@@ -1,0 +1,33 @@
+name: data-product-api-service
+
+services:
+  # No Postgres of its own: this service reads the API Serving Store
+  # directly (serving-projection-service's Postgres, host port 5440) --
+  # see serving-projection-service/docker-compose.yml's own comment for
+  # why that DB is the shared "PostgreSQL API Serving Store" from the
+  # Phase 8 architecture diagram, not a per-service database.
+  data-product-api-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      # Host port 8095: 8080/8090/8091/8092/8093/8094 are already taken.
+      - "8095:8095"
+    environment:
+      NODE_ENV: development
+      PORT: 8095
+      AUTH_MODE: development
+
+      SERVING_STORE_DATABASE_URL: postgresql://serving:serving@host.docker.internal:5440/serving
+
+      CATALOG_SERVICE_URL: http://host.docker.internal:8092
+      CATALOG_SERVICE_INTERNAL_API_KEY: dev-internal-key-change-me
+      SUBSCRIPTION_SERVICE_URL: http://host.docker.internal:8093
+      SUBSCRIPTION_SERVICE_INTERNAL_API_KEY: dev-internal-key-change-me
+
+      CURSOR_SIGNING_SECRET: dev-cursor-signing-secret-change-me
+
+      LOG_LEVEL: info
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["node", "dist/scripts/start.js"]

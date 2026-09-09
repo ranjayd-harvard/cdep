@@ -6,8 +6,8 @@ import { DEFAULT_ORGANIZATION_ID, SECONDARY_ORGANIZATION_ID } from "./organizati
  * `scripts/seed-catalog.ts`) — the actual data-scoping unit (see
  * `src/lib/tenant-scoped-collection.ts`). Every organization gets exactly
  * one `isDefault: true` tenant here, matching what
- * `createOrganizationAndBecomeAdmin` (see
- * `src/app/(auth)/onboarding/actions.ts`) produces for a real signup.
+ * `createOrganizationWithAdmin` (see
+ * `src/app/admin/organizations/actions.ts`) produces for a real org.
  */
 export const MOCK_TENANTS: Tenant[] = [
   {

@@ -38,3 +38,44 @@ export async function sendOrganizationInviteEmail(
     html: `<p>You've been invited to join <strong>${organizationDisplayName}</strong> on Data Exchange.</p><p><a href="${link}">${link}</a></p><p>This link expires in 7 days.</p>`,
   });
 }
+
+/**
+ * Sent when a superuser validates an org's first CUSTOMER_ADMIN account
+ * (see `validatePendingMember`,
+ * `src/app/admin/organizations/[organizationId]/actions.ts`). Reuses the
+ * `reset-password` token purpose/link — that flow already just sets a
+ * password given a valid token, indifferent to whether one existed
+ * before, so no separate "set password" page is needed.
+ */
+export async function sendAccountValidatedEmail(
+  email: string,
+  token: string,
+  organizationDisplayName: string,
+): Promise<void> {
+  const link = appUrl(`/reset-password?token=${encodeURIComponent(token)}`);
+  await sendEmail({
+    to: email,
+    subject: `Your ${organizationDisplayName} account has been approved`,
+    text: `Your administrator account for ${organizationDisplayName} has been approved. Set your password to get started:\n\n${link}\n\nThis link expires in 1 hour.`,
+    html: `<p>Your administrator account for <strong>${organizationDisplayName}</strong> has been approved. Set your password to get started:</p><p><a href="${link}">${link}</a></p><p>This link expires in 1 hour.</p>`,
+  });
+}
+
+/**
+ * Sent to every currently-active member of an organization when a
+ * superuser activates/deactivates it (see `setOrganizationStatus`,
+ * `src/app/admin/organizations/actions.ts`).
+ */
+export async function sendOrganizationStatusChangeEmail(
+  email: string,
+  organizationDisplayName: string,
+  status: "active" | "inactive",
+): Promise<void> {
+  const change = status === "active" ? "has been reactivated" : "has been deactivated";
+  await sendEmail({
+    to: email,
+    subject: `${organizationDisplayName} ${change}`,
+    text: `Your organization, ${organizationDisplayName}, ${change} by a platform administrator.`,
+    html: `<p>Your organization, <strong>${organizationDisplayName}</strong>, ${change} by a platform administrator.</p>`,
+  });
+}

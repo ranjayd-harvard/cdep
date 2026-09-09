@@ -27,6 +27,24 @@ const STATUS_MAP: Record<string, { label: string; color: BadgeColor }> = {
   ERROR: { label: "Error", color: "red" },
   WARNING: { label: "Warning", color: "yellow" },
   INFO: { label: "Info", color: "blue" },
+  // Phase 6 subscription-service statuses (subscription lifecycle +
+  // entitlement decisions).
+  PENDING: { label: "Pending", color: "gray" },
+  PAUSED: { label: "Paused", color: "yellow" },
+  SUSPENDED: { label: "Suspended", color: "red" },
+  CANCELLED: { label: "Cancelled", color: "gray" },
+  ALLOW: { label: "Entitled", color: "green" },
+  DENY: { label: "Not entitled", color: "red" },
+  // Phase 7 scheduling-service execution statuses.
+  EVALUATING: { label: "Evaluating", color: "yellow" },
+  ELIGIBLE: { label: "Eligible", color: "blue" },
+  DISPATCHING: { label: "Dispatching", color: "yellow" },
+  SUBMITTED: { label: "Submitted", color: "blue" },
+  RETRY_WAIT: { label: "Retrying", color: "yellow" },
+  SKIPPED: { label: "Skipped", color: "gray" },
+  SUCCEEDED: { label: "Succeeded", color: "green" },
+  TERMINAL_FAILED: { label: "Failed", color: "red" },
+  DEAD_LETTERED: { label: "Dead-lettered", color: "red" },
 };
 
 export function StatusBadge({ status }: { status: string }) {

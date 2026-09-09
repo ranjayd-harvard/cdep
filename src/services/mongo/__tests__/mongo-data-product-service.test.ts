@@ -16,8 +16,8 @@ function seed() {
   const db = createFakeDb({
     entitlements: [{ tenantId: TENANT_A, dataProductId: "dp-a", status: "ACTIVE" }],
     dataProducts: [
-      { _id: "dp-a", displayName: "A's product", datasetIds: [] },
-      { _id: "dp-b", displayName: "B's product", datasetIds: [] },
+      { _id: "dp-a", displayName: "A's product" },
+      { _id: "dp-b", displayName: "B's product" },
     ],
   });
   getDbMock.mockResolvedValue(db);

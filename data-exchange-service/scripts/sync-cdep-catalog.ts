@@ -26,14 +26,23 @@
 // database, write ours, exit — not part of the running service, and not
 // imported by anything under src/.
 //
-// Run manually after any cdep catalog change you want reflected here
-// (new signup, new entitlement grant, catalog edit): `npm run sync:cdep`.
-// See docs/exchange-service-integration.md § "Keeping catalogs in sync"
-// for the fuller picture and the longer-term fix (a real-time sync
-// instead of an on-demand script).
+// cdep now also pushes real-time, per-entity updates via
+// `catalog-sync.routes.ts` right after each catalog-affecting write (see
+// `src/lib/exchange-service/catalog-sync.ts` in cdep) — this script is the
+// reconciliation backstop for whatever that push missed (the service was
+// down, a push failed and was only logged, or rows created before this
+// existed). Safe to run any time: `npm run sync:cdep`. See
+// docs/exchange-service-integration.md § "Keeping catalogs in sync".
 import { MongoClient } from "mongodb";
 import { pool } from "../src/database/pool.js";
 import { logger } from "../src/common/logger/logger.js";
+import {
+  upsertDataProduct,
+  upsertEntitlement,
+  upsertMembership,
+  upsertOrganization,
+  upsertTenant,
+} from "../src/modules/catalog-sync/catalog-sync.repository.js";
 
 const CDEP_MONGODB_URI = process.env.CDEP_MONGODB_URI;
 const CDEP_MONGODB_DATABASE = process.env.CDEP_MONGODB_DATABASE ?? "portal";
@@ -58,7 +67,6 @@ interface CdepTenant {
 }
 interface CdepDataset {
   _id: string;
-  dataProductId: string;
   displayName: string;
   version: string;
 }
@@ -66,6 +74,10 @@ interface CdepEntitlement {
   tenantId: string;
   dataProductId: string;
   status: string;
+}
+interface CdepDataProductDataset {
+  dataProductId: string;
+  datasetId: string;
 }
 interface CdepUser {
   _id: string;
@@ -79,7 +91,7 @@ async function main() {
   await client.connect();
   const db = client.db(CDEP_MONGODB_DATABASE);
 
-  const [organizations, tenants, datasets, entitlements, users] = await Promise.all([
+  const [organizations, tenants, datasets, entitlements, users, dataProductDatasets] = await Promise.all([
     db.collection<CdepOrganization>("organizations").find({}).toArray(),
     db.collection<CdepTenant>("tenants").find({}).toArray(),
     db.collection<CdepDataset>("datasets").find({}).toArray(),
@@ -88,33 +100,28 @@ async function main() {
       .collection<CdepUser>("users")
       .find({ organizationId: { $ne: null }, tenantId: { $ne: null }, role: { $in: ["CUSTOMER_ADMIN", "CUSTOMER_USER", "CUSTOMER_READONLY"] } })
       .toArray(),
+    db.collection<CdepDataProductDataset>("dataProductDatasets").find({}).toArray(),
   ]);
 
+  // cdep models the Dataset <-> DataProduct relationship as a many-to-many
+  // join (a Dataset can sit under several DataProducts), not a field on
+  // Dataset itself — see src/data/mocks/data-product-datasets.ts.
+  const dataProductIdsByDataset = new Map<string, Set<string>>();
+  for (const link of dataProductDatasets) {
+    if (!dataProductIdsByDataset.has(link.datasetId)) dataProductIdsByDataset.set(link.datasetId, new Set());
+    dataProductIdsByDataset.get(link.datasetId)!.add(link.dataProductId);
+  }
+
   for (const org of organizations) {
-    await pool.query(
-      `INSERT INTO exchange.organizations (organization_id, display_name, status)
-       VALUES ($1, $2, 'ACTIVE')
-       ON CONFLICT (organization_id) DO UPDATE SET display_name = EXCLUDED.display_name`,
-      [org._id, org.displayName],
-    );
+    await upsertOrganization(org._id, org.displayName);
   }
 
   for (const tenant of tenants) {
-    await pool.query(
-      `INSERT INTO exchange.tenants (tenant_id, organization_id, display_name, status)
-       VALUES ($1, $2, $3, 'ACTIVE')
-       ON CONFLICT (tenant_id) DO UPDATE SET organization_id = EXCLUDED.organization_id, display_name = EXCLUDED.display_name`,
-      [tenant._id, tenant.organizationId, tenant.displayName],
-    );
+    await upsertTenant(tenant._id, tenant.organizationId, tenant.displayName);
   }
 
   for (const user of users) {
-    await pool.query(
-      `INSERT INTO exchange.tenant_memberships (user_id, organization_id, tenant_id, role, status)
-       VALUES ($1, $2, $3, $4, 'ACTIVE')
-       ON CONFLICT (user_id, organization_id, tenant_id) DO UPDATE SET role = EXCLUDED.role`,
-      [user._id, user.organizationId, user.tenantId, user.role],
-    );
+    await upsertMembership(user._id, user.organizationId!, user.tenantId!, user.role!);
   }
 
   // Each cdep Dataset becomes a data-exchange-service data product in its
@@ -123,12 +130,12 @@ async function main() {
   // Every one is BIDIRECTIONAL: cdep doesn't track upload-vs-download
   // intent per dataset, only per Exchange instance.
   for (const ds of datasets) {
-    await pool.query(
-      `INSERT INTO exchange.data_products (data_product_id, name, description, direction, current_schema_version, status)
-       VALUES ($1, $2, $3, 'BIDIRECTIONAL', $4, 'ACTIVE')
-       ON CONFLICT (data_product_id) DO UPDATE SET
-         name = EXCLUDED.name, current_schema_version = EXCLUDED.current_schema_version`,
-      [ds._id, ds.displayName, `Mirrors cdep dataset "${ds._id}" (catalog data product ${ds.dataProductId}).`, ds.version ?? "unknown"],
+    const parentDataProductIds = [...(dataProductIdsByDataset.get(ds._id) ?? [])];
+    await upsertDataProduct(
+      ds._id,
+      ds.displayName,
+      `Mirrors cdep dataset "${ds._id}" (catalog data product(s): ${parentDataProductIds.join(", ") || "none"}).`,
+      ds.version ?? "unknown",
     );
   }
 
@@ -144,14 +151,9 @@ async function main() {
   for (const tenant of tenants) {
     const entitledDataProducts = entitledDataProductsByTenant.get(tenant._id) ?? new Set<string>();
     for (const ds of datasets) {
-      const entitled = entitledDataProducts.has(ds.dataProductId);
-      await pool.query(
-        `INSERT INTO exchange.tenant_data_product_entitlements (tenant_id, data_product_id, can_upload, can_download, status)
-         VALUES ($1, $2, $3, $3, 'ACTIVE')
-         ON CONFLICT (tenant_id, data_product_id) DO UPDATE SET
-           can_upload = EXCLUDED.can_upload, can_download = EXCLUDED.can_download`,
-        [tenant._id, ds._id, entitled],
-      );
+      const parentDataProductIds = dataProductIdsByDataset.get(ds._id) ?? new Set<string>();
+      const entitled = [...parentDataProductIds].some((id) => entitledDataProducts.has(id));
+      await upsertEntitlement(tenant._id, ds._id, entitled, entitled);
     }
   }
 

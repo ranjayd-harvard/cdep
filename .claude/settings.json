@@ -33,7 +33,20 @@
       "Bash(docker exec *)",
       "Bash(docker compose *)",
       "Bash(.venv/bin/pip install *)",
-      "Bash(.venv/bin/ruff check *)"
+      "Bash(.venv/bin/ruff check *)",
+      "Bash(mkdir -p subscription-service/src/domain)",
+      "Bash(mkdir -p subscription-service/src/common/errors)",
+      "Bash(mkdir -p subscription-service/src/common/ids)",
+      "Bash(mkdir -p subscription-service/src/common/logger)",
+      "Bash(mkdir -p subscription-service/src/config)",
+      "Bash(grep -v '^$')",
+      "Bash(curl -s http://localhost:8092/v1/data-products/event-performance/versions)",
+      "Bash(python3 -m json.tool)",
+      "Bash(curl -s \"http://localhost:8092/internal/v1/versions/api-contract?data_product_id=event-performance&version=1.0.0\" -H \"x-internal-api-key: dev-internal-key-change-me\" -H \"x-actor-type: SERVICE\" -H \"x-actor-id: verify\" -H \"x-actor-role: PLATFORM_ADMIN\")",
+      "Bash(pip3 show *)",
+      "Bash(.venv/bin/python --version)",
+      "Bash(.venv/bin/pip show *)",
+      "Bash(.venv/bin/python -m pytest --version)"
     ],
     "additionalDirectories": [
       "/Users/ranjay.kumar/Documents/Ranjay/agentic-ai/react/cdep/src/app/api/downloads/[fileId]"

@@ -1,0 +1,110 @@
+name: serving-projection-service
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: serving
+      POSTGRES_PASSWORD: serving
+      POSTGRES_DB: serving
+    ports:
+      # Host port 5440: 5432 (host default), 5433 (data-exchange-service),
+      # 5434 (data-lakehouse), 5436 (data-publication-service), 5437
+      # (data-product-catalog-service), 5438 (subscription-service), and
+      # 5439 (scheduling-service) are already taken on this machine. This
+      # IS the "PostgreSQL API Serving Store" from the Phase 8 architecture
+      # diagram -- data-product-api-service connects here directly
+      # (read-mostly) over host.docker.internal:5440, the same
+      # cross-service-Postgres pattern data-publication-service already
+      # uses to read data-lakehouse's pipeline_runs table.
+      - "5440:5432"
+    volumes:
+      - serving-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U serving -d serving"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Interactive runner for scripts/run_projection.py, run_migrations.py,
+  # seed_demo_gold.py -- same shape as data-publication-service's own
+  # `runner` service.
+  runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SERVING_ENV: local
+      SERVING_DB_HOST: postgres
+      SERVING_DB_PORT: "5432"
+      SERVING_DB_NAME: serving
+      SERVING_DB_USER: serving
+      SERVING_DB_PASSWORD: serving
+
+      SERVING_LAKEHOUSE_CATALOG_NAME: local
+      SERVING_LAKEHOUSE_CATALOG_URI: postgresql+psycopg2://lakehouse:lakehouse@host.docker.internal:5434/lakehouse
+      SERVING_LAKEHOUSE_WAREHOUSE: s3://lakehouse-bronze/
+      SERVING_LAKEHOUSE_S3_ENDPOINT: http://host.docker.internal:9010
+      SERVING_LAKEHOUSE_S3_ACCESS_KEY: lakehouse
+      SERVING_LAKEHOUSE_S3_SECRET_KEY: lakehouse123
+      SERVING_LAKEHOUSE_S3_REGION: us-east-1
+    volumes:
+      - ./src:/app/src
+      - ./sql:/app/sql
+      - ./scripts:/app/scripts
+      - ./tests:/app/tests
+    working_dir: /app
+    tty: true
+    stdin_open: true
+
+  # Internal-only HTTP API: health, projection-run history, and manual
+  # trigger -- same pattern as data-publication-service's own `api` service
+  # (host port 8091). Never customer-facing; data-product-api-service does
+  # NOT call this over HTTP, it reads Postgres directly (see postgres
+  # service comment above) -- this is ops/observability surface only.
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SERVING_ENV: local
+      SERVING_DB_HOST: postgres
+      SERVING_DB_PORT: "5432"
+      SERVING_DB_NAME: serving
+      SERVING_DB_USER: serving
+      SERVING_DB_PASSWORD: serving
+
+      SERVING_LAKEHOUSE_CATALOG_NAME: local
+      SERVING_LAKEHOUSE_CATALOG_URI: postgresql+psycopg2://lakehouse:lakehouse@host.docker.internal:5434/lakehouse
+      SERVING_LAKEHOUSE_WAREHOUSE: s3://lakehouse-bronze/
+      SERVING_LAKEHOUSE_S3_ENDPOINT: http://host.docker.internal:9010
+      SERVING_LAKEHOUSE_S3_ACCESS_KEY: lakehouse
+      SERVING_LAKEHOUSE_S3_SECRET_KEY: lakehouse123
+      SERVING_LAKEHOUSE_S3_REGION: us-east-1
+
+      SERVING_INTERNAL_API_KEY: dev-internal-key-change-me-serving
+    ports:
+      # Host port 8096 (container listens on 8000): 8080/8090/8091/8092/
+      # 8093/8094/8095 (data-product-api-service) are already taken.
+      - "8096:8000"
+    volumes:
+      - ./src:/app/src
+      - ./sql:/app/sql
+      - ./scripts:/app/scripts
+      - ./tests:/app/tests
+    working_dir: /app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    command: ["-c", "uvicorn serving_projection.api.app:app --host 0.0.0.0 --port 8000"]
+
+volumes:
+  serving-postgres-data:

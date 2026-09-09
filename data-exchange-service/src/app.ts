@@ -10,7 +10,9 @@ import { uploadRoutes } from "./modules/uploads/upload.routes.js";
 import { downloadRoutes } from "./modules/downloads/download.routes.js";
 import { publicationRoutes } from "./modules/publications/publication.routes.js";
 import { outboundPublicationRoutes } from "./modules/outbound-publications/outbound-publication.routes.js";
+import { pipelineJobRoutes } from "./modules/pipeline-jobs/pipeline-job.routes.js";
 import { dataProductRoutes } from "./modules/data-products/data-product.routes.js";
+import { catalogSyncRoutes } from "./modules/catalog-sync/catalog-sync.routes.js";
 import { healthRoutes } from "./modules/health/health.routes.js";
 import { generateCorrelationId } from "./common/ids/id-generator.js";
 
@@ -94,7 +96,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(downloadRoutes);
   await app.register(publicationRoutes);
   await app.register(outboundPublicationRoutes);
+  await app.register(pipelineJobRoutes);
   await app.register(dataProductRoutes);
+  await app.register(catalogSyncRoutes);
 
   return app;
 }

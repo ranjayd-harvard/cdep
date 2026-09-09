@@ -10,6 +10,7 @@ platform/status.sh             # what's running right now
 platform/restart.sh            # stop then start everything
 platform/rebuild.sh            # rebuild images, then redeploy everything
 platform/stop.sh               # bring everything down (volumes kept)
+platform/platform-init.sh      # wipe Mongo/Postgres/MinIO data and start over fresh (destructive)
 ```
 
 Target just one service by name (its directory name):
@@ -28,6 +29,27 @@ platform/start.sh --timeout 180     # per-service health-check timeout (default 
 platform/rebuild.sh --no-cache      # rebuild images from scratch, ignoring the Docker build cache
 platform/stop.sh --volumes          # ALSO deletes Postgres/Mongo/MinIO data — destructive, opt-in only
 ```
+
+## Resetting to a clean instance
+
+`platform/platform-init.sh` is for when a dev instance has accumulated so
+much mock/seed data that it's easier to start over than clean it up by
+hand. It wipes data and brings everything back up fresh in one step:
+
+```bash
+platform/platform-init.sh                     # confirm, wipe cdep + data-exchange-service + data-lakehouse, restart, bootstrap a superuser
+platform/platform-init.sh --yes               # skip the confirmation prompt
+platform/platform-init.sh --include-publication  # also wipe data-publication-service's control-plane Postgres
+platform/platform-init.sh --no-superuser      # skip the superuser bootstrap step
+```
+
+It's `stop.sh --volumes` + `start.sh` for the named services, plus a
+confirmation gate (it's destructive and unrecoverable) and an automatic
+`npm run create-superuser` afterward so the freshly-wiped portal isn't
+left with no way to log in. `data-publication-service`'s own Postgres
+isn't touched by default since it's not part of what usually gets messy
+(mock users/orgs/catalog data, exchange/lakehouse fixtures) — opt in with
+`--include-publication` if you want a truly clean slate.
 
 `restart.sh --build` and `rebuild.sh` overlap in effect (both end with a
 freshly-built image running) but answer different questions: `restart.sh`

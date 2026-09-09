@@ -1,0 +1,42 @@
+# Bronze->Silver mapping: bronze.ranjay_test_metrics -> silver.ranjay_test_metric.
+# Configuration-driven: source column, target column, canonical type,
+# required-ness, default, optional named transform.
+
+version: "1.0"
+
+source:
+  table: bronze.ranjay_test_metrics
+  dataProductId: ds-ranjay-test-metrics-b31235
+
+target:
+  table: silver.ranjay_test_metric
+  entity: ranjay_test_metric
+
+keys:
+  businessKey:
+    - metric_id
+
+mapping:
+  metric_id:
+    source: metric_id
+    type: string
+    required: true
+
+  metric_label:
+    source: metric_label
+    type: string
+    required: true
+
+  recorded_on:
+    source: recorded_on
+    type: date
+    required: true
+
+  metric_value:
+    source: metric_value
+    type: "decimal(18,2)"
+    required: false
+
+lineage:
+  source_exchange_id: _exchange_id
+  source_ingestion_id: _ingestion_id

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pyiceberg.exceptions import NoSuchTableError
 
 from lakehouse.api.auth import require_internal_api_key
 from lakehouse.api.schemas import (
@@ -303,7 +304,14 @@ def get_data_product_rows(product_id: str, limit: int = 100) -> list[dict]:
     if registration is None:
         raise HTTPException(status_code=404, detail={"error_code": "DATA_PRODUCT_NOT_CONFIGURED"})
 
-    rows = read_gold_admin(get_catalog(), table_name=registration.gold_table_name)
+    try:
+        rows = read_gold_admin(get_catalog(), table_name=registration.gold_table_name)
+    except NoSuchTableError:
+        # Registered in lakehouse.data_products but no Silver->Gold run has
+        # ever written its Iceberg table yet -- the portal's Data Products
+        # page already renders this as "No rows yet -- run Silver -> Gold"
+        # for an empty list, so this is that same state, not an error.
+        return []
     return _json_safe(rows[:limit])
 
 

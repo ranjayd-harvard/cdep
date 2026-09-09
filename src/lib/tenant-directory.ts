@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { getDb } from "@/lib/mongodb";
 import { slugify } from "@/lib/utils";
+import { syncTenant } from "@/lib/exchange-service/catalog-sync";
 import type { Tenant } from "@/models";
 
 interface TenantDocument {
@@ -35,6 +36,39 @@ export async function listTenantsByOrganization(organizationId: string): Promise
   return docs.map(toTenant);
 }
 
+export async function findTenantsByIds(tenantIds: string[]): Promise<Tenant[]> {
+  if (tenantIds.length === 0) {
+    return [];
+  }
+  const db = await getDb();
+  const docs = await db.collection<TenantDocument>("tenants").find({ _id: { $in: tenantIds } }).toArray();
+  return docs.map(toTenant);
+}
+
+/**
+ * Admin Console only: case-insensitive search over tenant name/display
+ * name across every organization — same convention as
+ * `searchOrganizationsByName` (`src/lib/organization-directory.ts`),
+ * capped so a broad query can't return an unbounded result set.
+ */
+export async function searchTenantsByName(query: string): Promise<Tenant[]> {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const db = await getDb();
+  const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(escaped, "i");
+  const docs = await db
+    .collection<TenantDocument>("tenants")
+    .find({ $or: [{ name: pattern }, { displayName: pattern }] })
+    .limit(10)
+    .toArray();
+
+  return docs.map(toTenant);
+}
+
 export async function findDefaultTenantForOrganization(organizationId: string): Promise<Tenant | null> {
   const db = await getDb();
   const doc = await db.collection<TenantDocument>("tenants").findOne({ organizationId, isDefault: true });
@@ -45,8 +79,8 @@ export async function findDefaultTenantForOrganization(organizationId: string): 
  * Creates a Tenant — the actual data-scoping unit (see
  * `src/lib/tenant-scoped-collection.ts`) — under an Organization. Every
  * organization gets exactly one `isDefault: true` tenant at creation time
- * (see `createOrganizationAndBecomeAdmin` in
- * `src/app/(auth)/onboarding/actions.ts`); a CUSTOMER_ADMIN can create
+ * (see `createOrganizationWithAdmin` in
+ * `src/app/admin/organizations/actions.ts`); a CUSTOMER_ADMIN can create
  * additional, non-default tenants later from Settings.
  */
 export async function createTenant(input: {
@@ -64,6 +98,7 @@ export async function createTenant(input: {
     status: "active",
   };
   await db.collection<TenantDocument>("tenants").insertOne(doc);
+  await syncTenant(doc._id, doc.organizationId, doc.displayName);
   return toTenant(doc);
 }
 

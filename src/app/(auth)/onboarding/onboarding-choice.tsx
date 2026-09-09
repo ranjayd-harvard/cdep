@@ -1,27 +1,17 @@
 "use client";
 
-import { useActionState, useState, useTransition, type ChangeEvent } from "react";
+import { useState, useTransition, type ChangeEvent } from "react";
 import { Button, Input } from "@/components/ui";
 import type { Organization } from "@/models";
-import {
-  createOrganizationAndBecomeAdmin,
-  requestToJoinOrganization,
-  searchOrganizations,
-  type CreateOrganizationState,
-} from "./actions";
+import { requestToJoinOrganization, searchOrganizations } from "./actions";
 
-const INITIAL_CREATE_STATE: CreateOrganizationState = {};
-
-type Mode = "choose" | "join" | "create";
+type Mode = "choose" | "join";
 
 export function OnboardingChoice() {
   const [mode, setMode] = useState<Mode>("choose");
 
   if (mode === "join") {
     return <JoinOrganization onBack={() => setMode("choose")} />;
-  }
-  if (mode === "create") {
-    return <CreateOrganization onBack={() => setMode("choose")} />;
   }
 
   return (
@@ -33,9 +23,10 @@ export function OnboardingChoice() {
       <Button className="w-full" onClick={() => setMode("join")}>
         Yes, find my organization
       </Button>
-      <Button variant="secondary" className="w-full" onClick={() => setMode("create")}>
-        No, create a new organization
-      </Button>
+      <p className="text-center text-xs text-slate-400">
+        Don&apos;t see your organization, or need a new one set up? Contact your platform administrator —
+        organizations are created from the Admin Console.
+      </p>
     </div>
   );
 }
@@ -115,24 +106,5 @@ function JoinOrganization({ onBack }: { onBack: () => void }) {
         </ul>
       ) : null}
     </div>
-  );
-}
-
-function CreateOrganization({ onBack }: { onBack: () => void }) {
-  const [state, formAction, pending] = useActionState(createOrganizationAndBecomeAdmin, INITIAL_CREATE_STATE);
-
-  return (
-    <form action={formAction} className="flex flex-col gap-4" noValidate>
-      <BackButton onBack={onBack} />
-      {state.error ? (
-        <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-          {state.error}
-        </p>
-      ) : null}
-      <Input label="Organization name" name="displayName" required autoComplete="organization" />
-      <Button type="submit" disabled={pending} className="w-full">
-        {pending ? "Creating…" : "Create organization"}
-      </Button>
-    </form>
   );
 }

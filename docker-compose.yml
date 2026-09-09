@@ -35,6 +35,9 @@ services:
       # to the Mongo-backed services untouched.
       EXCHANGE_SERVICE_URL: "${EXCHANGE_SERVICE_URL:-}"
       EXCHANGE_SERVICE_INTERNAL_API_KEY: "${EXCHANGE_SERVICE_INTERNAL_API_KEY:-}"
+      # Demo/testing convenience switch — see .env.example. Defaults to true
+      # (fixture-content simulator) when unset.
+      DEMO_FIXTURE_PUBLISH_ENABLED: "${DEMO_FIXTURE_PUBLISH_ENABLED:-true}"
       # data-lakehouse superadmin integration — backs /admin/lakehouse. Same
       # opt-in pattern as EXCHANGE_SERVICE_URL above: unset means that page
       # renders a "not configured" empty state instead of crashing.
@@ -49,6 +52,24 @@ services:
       # (8091) the same way LAKEHOUSE_SERVICE_URL reaches 8090.
       PUBLICATION_SERVICE_URL: "${PUBLICATION_SERVICE_URL:-}"
       PUBLICATION_SERVICE_INTERNAL_API_KEY: "${PUBLICATION_SERVICE_INTERNAL_API_KEY:-}"
+      # data-product-catalog-service integration (Phase 5) — backs
+      # src/lib/catalog-service/client.ts. Same opt-in pattern as
+      # PUBLICATION_SERVICE_URL above. "host.docker.internal" reaches
+      # data-product-catalog-service's own host-published API port (8092)
+      # the same way PUBLICATION_SERVICE_URL reaches 8091.
+      CATALOG_SERVICE_URL: "${CATALOG_SERVICE_URL:-}"
+      CATALOG_SERVICE_INTERNAL_API_KEY: "${CATALOG_SERVICE_INTERNAL_API_KEY:-}"
+      # subscription-service integration (Phase 6) — backs
+      # src/lib/subscription-service/client.ts. Customer-facing (/v1/*)
+      # endpoints only, so no internal API key is needed here. Same opt-in
+      # pattern as CATALOG_SERVICE_URL above. "host.docker.internal" reaches
+      # subscription-service's own host-published API port (8093).
+      SUBSCRIPTION_SERVICE_URL: "${SUBSCRIPTION_SERVICE_URL:-}"
+      # scheduling-service integration (Phase 7) — backs
+      # src/lib/scheduling-service/client.ts. Same opt-in, customer-facing-
+      # only pattern as SUBSCRIPTION_SERVICE_URL above. "host.docker.internal"
+      # reaches scheduling-service's own host-published API port (8094).
+      SCHEDULING_SERVICE_URL: "${SCHEDULING_SERVICE_URL:-}"
       # Needed because this container also runs in Docker: the signed
       # upload URL's hostname (data-exchange-service's own
       # OBJECT_STORAGE_PUBLIC_ENDPOINT, typically "localhost:9000") means

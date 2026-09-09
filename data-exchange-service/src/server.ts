@@ -1,6 +1,7 @@
 import { buildApp } from "./app.js";
 import { env } from "./config/env.js";
 import { logger } from "./common/logger/logger.js";
+import { startPipelineWorker, stopPipelineWorker } from "./pipeline-worker/worker-loop.js";
 
 async function main(): Promise<void> {
   const app = await buildApp();
@@ -13,8 +14,11 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  startPipelineWorker();
+
   const shutdown = async (signal: string) => {
     logger.info({ signal }, "Shutting down");
+    stopPipelineWorker();
     await app.close();
     process.exit(0);
   };

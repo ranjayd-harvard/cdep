@@ -89,4 +89,5 @@ export const ID_PREFIXES = {
   event: "evt",
   validation: "val",
   correlation: "corr",
+  pipelineJob: "pj",
 } as const;

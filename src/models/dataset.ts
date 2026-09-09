@@ -55,7 +55,6 @@ export interface RowLevelPolicy {
 
 export interface Dataset {
   id: string;
-  dataProductId: string;
   name: string;
   displayName: string;
   description: string;

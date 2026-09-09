@@ -3,7 +3,6 @@ import { DatasetAccessMethod, DatasetStatus, type Dataset } from "@/models";
 export const MOCK_DATASETS: Dataset[] = [
   {
     id: "ds-customer-360",
-    dataProductId: "dp-customer-insights",
     name: "customer_360",
     displayName: "Customer 360",
     description:
@@ -47,7 +46,6 @@ export const MOCK_DATASETS: Dataset[] = [
   },
   {
     id: "ds-event-performance",
-    dataProductId: "dp-events-operations",
     name: "event_performance",
     displayName: "Event Performance",
     description:
@@ -90,7 +88,6 @@ export const MOCK_DATASETS: Dataset[] = [
   },
   {
     id: "ds-venue-activity",
-    dataProductId: "dp-events-operations",
     name: "venue_activity",
     displayName: "Venue Activity",
     description:
@@ -124,7 +121,6 @@ export const MOCK_DATASETS: Dataset[] = [
   },
   {
     id: "ds-product-catalog",
-    dataProductId: "dp-commerce-finance",
     name: "product_catalog",
     displayName: "Product Catalog",
     description: "Master catalog of merchandise and add-on products available for sale alongside ticketed events.",
@@ -157,7 +153,6 @@ export const MOCK_DATASETS: Dataset[] = [
   },
   {
     id: "ds-transaction-detail",
-    dataProductId: "dp-customer-insights",
     name: "transaction_detail",
     displayName: "Transaction Detail",
     description: "Line-item level detail for every ticket and merchandise transaction processed on the platform.",
@@ -194,7 +189,6 @@ export const MOCK_DATASETS: Dataset[] = [
   },
   {
     id: "ds-inventory-availability",
-    dataProductId: "dp-events-operations",
     name: "inventory_availability",
     displayName: "Inventory Availability",
     description: "Real-time remaining ticket and merchandise inventory across all active events.",
@@ -226,7 +220,6 @@ export const MOCK_DATASETS: Dataset[] = [
   },
   {
     id: "ds-settlement-summary",
-    dataProductId: "dp-commerce-finance",
     name: "settlement_summary",
     displayName: "Settlement Summary",
     description: "Periodic settlement summaries reconciling gross sales, fees, and net payouts per venue partner.",
@@ -259,7 +252,6 @@ export const MOCK_DATASETS: Dataset[] = [
   },
   {
     id: "ds-location-master",
-    dataProductId: "dp-commerce-finance",
     name: "location_master",
     displayName: "Location Master",
     description: "Reference data for venues, cities, and regions used to standardize location attributes across datasets.",

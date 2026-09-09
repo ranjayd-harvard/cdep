@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { getDb } from "@/lib/mongodb";
 import { slugify } from "@/lib/utils";
+import { syncOrganization } from "@/lib/exchange-service/catalog-sync";
 import type { Organization } from "@/models";
 
 interface OrganizationDocument {
@@ -89,5 +90,6 @@ export async function createOrganization(input: { displayName: string }): Promis
     status: "active",
   };
   await db.collection<OrganizationDocument>("organizations").insertOne(doc);
+  await syncOrganization(doc._id, doc.displayName);
   return { id: doc._id, name: doc.name, displayName: doc.displayName, status: doc.status };
 }

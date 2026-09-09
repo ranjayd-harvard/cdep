@@ -1,7 +1,14 @@
 import type { DataProduct } from "@/models";
-import type { DataProductService } from "@/services/interfaces";
+import type { DataProductInput, DataProductService } from "@/services/interfaces";
 import { getEntitledDataProductIds, isEntitled } from "@/lib/entitlement-directory";
-import { findDataProductById, findDataProductsByIds } from "@/lib/data-product-directory";
+import {
+  createDataProduct,
+  deleteDataProduct,
+  findDataProductById,
+  findDataProductsByIds,
+  listDataProducts,
+  updateDataProduct,
+} from "@/lib/data-product-directory";
 
 /**
  * Entitlement enforcement for Data Products, in one place. A tenant
@@ -21,5 +28,21 @@ export class MongoDataProductService implements DataProductService {
       return null;
     }
     return findDataProductById(dataProductId);
+  }
+
+  listAllDataProducts(): Promise<DataProduct[]> {
+    return listDataProducts();
+  }
+
+  createDataProduct(input: DataProductInput): Promise<DataProduct> {
+    return createDataProduct(input);
+  }
+
+  updateDataProduct(dataProductId: string, input: DataProductInput): Promise<DataProduct | null> {
+    return updateDataProduct(dataProductId, input);
+  }
+
+  deleteDataProduct(dataProductId: string): Promise<void> {
+    return deleteDataProduct(dataProductId);
   }
 }

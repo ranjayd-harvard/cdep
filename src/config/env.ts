@@ -33,6 +33,16 @@ export const env = {
   // Only needed for the (currently opt-in) publish-on-upload behavior in
   // `ExchangeApiUploadService` — see that file. Never sent to the browser.
   exchangeServiceInternalApiKey: process.env.EXCHANGE_SERVICE_INTERNAL_API_KEY ?? "",
+  // Demo/testing convenience switch for `ExchangeApiUploadService`, gating
+  // between the pre-existing fixture-content simulator (`publishFixture` ->
+  // data-exchange-service's `/internal/v1/publications`) and enqueuing a
+  // real Bronze->Silver->Gold->Publish pipeline job (`enqueuePipelineJob` ->
+  // `/internal/v1/pipeline-jobs`, processed by that service's own pipeline
+  // worker on its own schedule). Defaults to true (today's behavior) so
+  // existing demo/dev setups are unaffected; set to "false" once real
+  // pipeline output is wanted instead of a fixture. See
+  // docs/exchange-service-integration.md.
+  demoFixturePublishEnabled: process.env.DEMO_FIXTURE_PUBLISH_ENABLED !== "false",
   // Only needed when THIS app also runs inside Docker (see
   // docker-compose.yml) — see the doc comment on `putToSignedUrl` in
   // `src/lib/exchange-service/client.ts` and
@@ -63,4 +73,36 @@ export const env = {
   // /internal/v1/* routes — a separate key/service from
   // lakehouseServiceInternalApiKey above. Never sent to the browser.
   publicationServiceInternalApiKey: process.env.PUBLICATION_SERVICE_INTERNAL_API_KEY ?? "",
+  // Server-only. Base URL of data-product-catalog-service's own HTTP API
+  // (Phase 5), e.g. "http://localhost:8092" outside Docker. Backs
+  // Data Product read paths (`src/lib/catalog-service/client.ts`) — customer
+  // (`/v1/*`) endpoints need no key, only `/internal/v1/*` calls send
+  // catalogServiceInternalApiKey below. Same opt-in, non-breaking pattern as
+  // lakehouseServiceUrl above — when unset, callers fall back to whatever
+  // Mongo-backed directory they already use.
+  catalogServiceUrl: process.env.CATALOG_SERVICE_URL ?? "",
+  catalogServiceEnabled: Boolean(process.env.CATALOG_SERVICE_URL),
+  // Sent as `x-internal-api-key` to data-product-catalog-service's
+  // /internal/v1/* routes — a separate key/service from
+  // publicationServiceInternalApiKey above. Never sent to the browser.
+  catalogServiceInternalApiKey: process.env.CATALOG_SERVICE_INTERNAL_API_KEY ?? "",
+  // Server-only. Base URL of subscription-service's own HTTP API (Phase 6),
+  // e.g. "http://localhost:8093" outside Docker. Backs the customer-facing
+  // `/subscriptions` page (`src/lib/subscription-service/client.ts`) — only
+  // `/v1/*` (customer, bearer-token) endpoints are called from the portal;
+  // no internal API key is needed here. Same opt-in, non-breaking pattern
+  // as catalogServiceUrl above.
+  subscriptionServiceUrl: process.env.SUBSCRIPTION_SERVICE_URL ?? "",
+  subscriptionServiceEnabled: Boolean(process.env.SUBSCRIPTION_SERVICE_URL),
+  // Server-only. Base URL of scheduling-service's own HTTP API (Phase 7),
+  // e.g. "http://localhost:8094" outside Docker. Backs the schedule-status/
+  // execution-history panel and the "Publish now" action on the
+  // customer-facing `/subscriptions` page (`src/lib/scheduling-service/client.ts`)
+  // — only `/v1/*` (customer, bearer-token) endpoints are called from the
+  // portal, same auth bridge as subscriptionServiceUrl above (scheduling-
+  // service's customer-auth.middleware.ts decodes the identical dev token).
+  // Same opt-in, non-breaking pattern as subscriptionServiceUrl: unset
+  // means the panel simply doesn't render.
+  schedulingServiceUrl: process.env.SCHEDULING_SERVICE_URL ?? "",
+  schedulingServiceEnabled: Boolean(process.env.SCHEDULING_SERVICE_URL),
 } as const;

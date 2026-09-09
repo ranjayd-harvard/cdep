@@ -158,9 +158,10 @@ own `MONGODB_URI`.
 
 cdep has a three-tier catalog: `DataProduct` (`dp-*`, e.g.
 `dp-events-operations`) → `Dataset` (`ds-*`, e.g. `ds-event-performance`,
-via `Dataset.dataProductId`) → `Exchange`/`UploadRequest.datasetId`.
-Entitlements are granted at the **DataProduct** level (cdep's
-`entitlements` collection).
+linked via the many-to-many `dataProductDatasets` join collection, not a
+field on `Dataset` itself — a Dataset can sit under several DataProducts)
+→ `Exchange`/`UploadRequest.datasetId`. Entitlements are granted at the
+**DataProduct** level (cdep's `entitlements` collection).
 
 data-exchange-service has only **one** tier: `data_products`
 (`exchange.data_products`), with `exchange.exchanges.data_product_id`
@@ -253,6 +254,38 @@ small new endpoint, PUT directly to MinIO from the browser, then call
 `/api/uploads/:id/complete`-equivalent — removing the proxy hop and
 `putToSignedUrl` entirely.
 
+## Publish-on-upload: fixture simulator vs. queued real pipeline
+
+`ExchangeApiUploadService.publishProcessedOutput` fires once a completed
+upload's INBOUND exchange reaches `COMPLETED`, and does one of two mutually
+exclusive things, chosen by `env.demoFixturePublishEnabled`
+(`DEMO_FIXTURE_PUBLISH_ENABLED`, default `true`):
+
+- **Fixture (default)** — `publishFixture()` (`src/lib/exchange-service/client.ts`)
+  calls data-exchange-service's `/internal/v1/publications`, which fabricates
+  a small deterministic sample and creates an OUTBOUND exchange from it
+  synchronously, in the same request. This predates any real transform
+  pipeline and is kept as an intentional demo/testing convenience — it
+  guarantees the Downloads/Exchanges pages always have something to show
+  regardless of whether data-lakehouse/data-publication-service are running.
+- **Queued real pipeline** (`DEMO_FIXTURE_PUBLISH_ENABLED=false`) —
+  `enqueuePipelineJob()` instead calls data-exchange-service's
+  `POST /internal/v1/pipeline-jobs`, which durably records a `PENDING` row in
+  that service's own `exchange.pipeline_jobs` table and returns immediately.
+  data-exchange-service's own pipeline worker (`src/pipeline-worker/` there)
+  polls that table on its own schedule and, when it claims a job, runs the
+  real chain — ingest → bronze-to-silver → silver-to-gold → publish — via
+  the exact same internal HTTP endpoints the superadmin
+  `/admin/lakehouse/pipelines` page already calls manually. A real,
+  Gold-derived OUTBOUND exchange appears once that finishes, on the
+  worker's schedule rather than synchronously with the upload request.
+
+Either branch is best-effort: a failure here (fixture call or enqueue call)
+never fails the upload itself, matching the pre-existing behavior. See
+[`pipeline-job-queue-design.md`](pipeline-job-queue-design.md) for the full
+design record (schema, worker internals, verification steps) — this section
+only covers the cdep-side decision point.
+
 ## Docker-in-Docker: the storage relay host problem
 
 Because of the proxy design above, the *portal's own server* sometimes
@@ -299,6 +332,7 @@ All server-only (no `NEXT_PUBLIC_` prefix) unless noted. See
 |---|---|---|
 | `EXCHANGE_SERVICE_URL` | `src/config/env.ts` → `env.exchangeServiceUrl`/`exchangeServiceEnabled` | Unset = fall back to Mongo-backed services entirely (non-breaking default). `http://localhost:8080` outside Docker, `http://host.docker.internal:8080` when the portal runs in its own docker-compose. |
 | `EXCHANGE_SERVICE_INTERNAL_API_KEY` | `ExchangeApiUploadService.publishProcessedOutput` | Must match data-exchange-service's own `INTERNAL_API_KEY`. Empty = publish-on-upload step is silently skipped (upload itself still succeeds). |
+| `DEMO_FIXTURE_PUBLISH_ENABLED` | `ExchangeApiUploadService.publishProcessedOutput` | Default `true` (fixture-content simulator, synchronous). `false` = enqueue a real Bronze→Silver→Gold→Publish pipeline job instead, processed asynchronously by data-exchange-service's own worker. See "Publish-on-upload" above. |
 | `EXCHANGE_SERVICE_STORAGE_RELAY_HOST` | `putToSignedUrl` | Only needed when this app runs in Docker — see previous section. Empty everywhere else. |
 | `NEXT_PUBLIC_API_BASE_URL` | `src/lib/http-client.ts` (client-side `Http*Service`s) | **Must stay empty.** Pre-existing landmine fixed by this integration — it was set to `http://localhost:8080` in `.env.local`, which would have made the *browser* call data-exchange-service paths directly (which don't exist there — data-exchange-service has `/v1/downloads/...`, not `/api/downloads/...`) and 404. Client code only ever calls this app's own `/api/*`. |
 | `NEXT_PUBLIC_USE_MOCK_SERVICES` | `src/services/client.ts` | Must be `false` for uploads/downloads to actually reach the server (`true` routes them to in-memory mocks client-side, bypassing everything above). Independent of `EXCHANGE_SERVICE_URL` — this flag governs the *client* registry, `EXCHANGE_SERVICE_URL` governs the *server* registry (`src/services/index.ts`). |
@@ -446,4 +480,38 @@ src/services/mongo/__tests__/*, src/services/mocks/__tests__/*
 eslint.config.mjs, tsconfig.json, vitest.config.mts (exclude data-exchange-service/)
 data-exchange-service/package.json (added sync:cdep script, mongodb devDependency)
 data-exchange-service/.env.example (added CDEP_MONGODB_URI/CDEP_MONGODB_DATABASE)
+```
+
+New files (queue-based pipeline trigger — see
+[`pipeline-job-queue-design.md`](pipeline-job-queue-design.md) for the full
+design record):
+
+```text
+data-exchange-service/migrations/009_pipeline_jobs.sql
+data-exchange-service/src/modules/pipeline-jobs/
+  pipeline-job.schemas.ts
+  pipeline-job.repository.ts
+  pipeline-job.service.ts
+  pipeline-job.routes.ts
+data-exchange-service/src/pipeline-worker/
+  lakehouse-client.ts        outbound HTTP client toward data-lakehouse
+  publication-client.ts      outbound HTTP client toward data-publication-service
+  pipeline-worker.service.ts the ingest->bronze->silver->gold->publish chain
+  worker-loop.ts             setInterval poll loop, started from server.ts
+docs/pipeline-job-queue-design.md
+```
+
+Changed files (queue-based pipeline trigger):
+
+```text
+data-exchange-service/src/app.ts                    (registered pipelineJobRoutes)
+data-exchange-service/src/server.ts                 (start/stop the worker loop)
+data-exchange-service/src/config/env.ts             (LAKEHOUSE_SERVICE_*/PUBLICATION_SERVICE_*/PIPELINE_WORKER_POLL_INTERVAL_MS)
+data-exchange-service/src/config/constants.ts        (ID_PREFIXES.pipelineJob)
+data-exchange-service/src/common/ids/id-generator.ts (generatePipelineJobId)
+data-exchange-service/docker-compose.yml, .env.example
+src/config/env.ts                                    (demoFixturePublishEnabled)
+src/lib/exchange-service/client.ts                   (enqueuePipelineJob)
+src/services/exchange-api/exchange-api-upload-service.ts (branches on the flag)
+.env.example, docker-compose.yml (DEMO_FIXTURE_PUBLISH_ENABLED)
 ```

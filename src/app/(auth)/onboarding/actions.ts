@@ -2,8 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { createOrganization, searchOrganizationsByName } from "@/lib/organization-directory";
-import { createTenant } from "@/lib/tenant-directory";
+import { searchOrganizationsByName } from "@/lib/organization-directory";
 import { createMembershipRequest, DuplicateMembershipRequestError } from "@/lib/organization-membership-directory";
 import {
   acceptInvitation as acceptInvitationRecord,
@@ -11,7 +10,7 @@ import {
   findPendingInvitationByEmail,
 } from "@/lib/organization-invitation-directory";
 import { assignPortalUserToOrganization } from "@/lib/user-directory";
-import { UserRole, type Organization } from "@/models";
+import type { Organization } from "@/models";
 
 /**
  * Shared guard for every onboarding action: must be signed in, and must
@@ -62,37 +61,6 @@ export async function requestToJoinOrganization(organizationId: string): Promise
   }
 
   redirect("/onboarding/pending");
-}
-
-export interface CreateOrganizationState {
-  error?: string;
-}
-
-/**
- * Creates a brand-new organization and its default tenant, then makes
- * the caller its CUSTOMER_ADMIN immediately — the same outcome
- * self-serve signup used to produce inline, just resolved here instead.
- */
-export async function createOrganizationAndBecomeAdmin(
-  _prevState: CreateOrganizationState,
-  formData: FormData,
-): Promise<CreateOrganizationState> {
-  const user = await requireOnboardingUser();
-
-  const displayName = String(formData.get("displayName") ?? "").trim();
-  if (!displayName) {
-    return { error: "Organization name is required." };
-  }
-
-  const organization = await createOrganization({ displayName });
-  const tenant = await createTenant({ organizationId: organization.id, displayName: "Default", isDefault: true });
-  await assignPortalUserToOrganization(user.id, {
-    organizationId: organization.id,
-    tenantId: tenant.id,
-    role: UserRole.CUSTOMER_ADMIN,
-  });
-
-  redirect("/dashboard");
 }
 
 /**

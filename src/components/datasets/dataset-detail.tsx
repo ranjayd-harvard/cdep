@@ -12,10 +12,10 @@ const ACCESS_METHOD_LABELS: Record<string, string> = {
 
 export function DatasetDetail({
   dataset,
-  dataProduct,
+  dataProducts,
 }: {
   dataset: Dataset;
-  dataProduct: DataProduct | null;
+  dataProducts: DataProduct[];
 }) {
   return (
     <div className="flex flex-col gap-6">
@@ -26,7 +26,22 @@ export function DatasetDetail({
         <CardContent>
           <p className="mb-4 text-sm text-slate-600">{dataset.description}</p>
           <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
-            <Field label="Data Product" value={dataProduct?.displayName ?? dataset.dataProductId} />
+            <Field
+              label="Used By"
+              value={
+                dataProducts.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {dataProducts.map((dataProduct) => (
+                      <Badge key={dataProduct.id} color="gray">
+                        {dataProduct.displayName}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  "—"
+                )
+              }
+            />
             <Field label="Data Owner" value={dataset.owner} />
             <Field label="Domain" value={dataset.domain} />
             <Field label="Version" value={dataset.version} />

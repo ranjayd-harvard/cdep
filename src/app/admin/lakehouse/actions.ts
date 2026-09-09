@@ -99,3 +99,23 @@ export async function triggerPublishGoldProductAction(formData: FormData): Promi
   if (result.errorMessage) params.set("ranErrorMessage", result.errorMessage);
   redirect(`/admin/lakehouse/pipelines?${params.toString()}`);
 }
+
+/**
+ * "Run" (a PENDING job, immediately instead of waiting for the pipeline
+ * worker's next poll tick) / "Re-enqueue" (a FAILED or SUCCEEDED job)
+ * action on the Pipeline Queue page -- both collapse to the same call, see
+ * PipelineJobAdminService.runPipelineJob. Blocks on the full
+ * Ingest->Bronze->Silver->Gold->Publish chain, same synchronous-trigger
+ * shape as the other actions in this file.
+ */
+export async function runPipelineJobAction(jobId: string): Promise<void> {
+  await requireSuperuserContext();
+  const result = await services.pipelineJobAdmin.runPipelineJob(jobId);
+  revalidatePath("/admin/lakehouse/queue");
+
+  const params = new URLSearchParams({ ranJobId: jobId });
+  if (result.job) params.set("ranStatus", result.job.status);
+  if (result.errorCode) params.set("ranErrorCode", result.errorCode);
+  if (result.errorMessage) params.set("ranErrorMessage", result.errorMessage);
+  redirect(`/admin/lakehouse/queue?${params.toString()}`);
+}

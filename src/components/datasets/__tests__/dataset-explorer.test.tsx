@@ -7,7 +7,6 @@ import { DatasetAccessMethod, DatasetStatus, type Dataset } from "@/models";
 function buildDataset(overrides: Partial<Dataset>): Dataset {
   return {
     id: "ds-1",
-    dataProductId: "dp-1",
     name: "dataset_one",
     displayName: "Dataset One",
     description: "First test dataset",

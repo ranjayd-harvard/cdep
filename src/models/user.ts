@@ -10,6 +10,15 @@ export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 export const PortalUserStatus = {
   ACTIVE: "active",
   SUSPENDED: "suspended",
+  /**
+   * A first CUSTOMER_ADMIN created for a brand-new organization (see
+   * `src/app/admin/organizations/actions.ts`), before a superuser has
+   * validated the account. Blocked at sign-in the same way SUSPENDED is
+   * (see `src/auth.ts`) until an admin approves it (see
+   * `validatePendingMember` in
+   * `src/app/admin/organizations/[organizationId]/actions.ts`).
+   */
+  PENDING_VALIDATION: "pending_validation",
 } as const;
 
 export type PortalUserStatus = (typeof PortalUserStatus)[keyof typeof PortalUserStatus];

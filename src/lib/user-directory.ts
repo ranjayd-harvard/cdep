@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { getDb } from "@/lib/mongodb";
 import { slugify } from "@/lib/utils";
+import { syncMembership } from "@/lib/exchange-service/catalog-sync";
 import { PortalUserStatus, type PortalUser, type UserRole } from "@/models";
 
 export interface AuthUser extends PortalUser {
@@ -72,6 +73,10 @@ export interface CreatePortalUserInput {
   tenantId: string | null;
   role: UserRole | null;
   passwordHash: string | null;
+  /** Defaults to ACTIVE. An admin-provisioned org's first CUSTOMER_ADMIN
+   * is created as PENDING_VALIDATION instead (see
+   * `src/app/admin/organizations/actions.ts`). */
+  status?: PortalUserStatus;
 }
 
 /**
@@ -91,13 +96,14 @@ export async function createPortalUser(input: CreatePortalUserInput): Promise<Au
     organizationId: input.organizationId,
     tenantId: input.tenantId,
     role: input.role,
-    status: PortalUserStatus.ACTIVE,
+    status: input.status ?? PortalUserStatus.ACTIVE,
     passwordHash: input.passwordHash,
     emailVerified: null,
     createdAt: now,
     updatedAt: now,
   };
   await db.collection<PortalUserDocument>("users").insertOne(doc);
+  await syncMembership(doc._id, doc.organizationId, doc.tenantId, doc.role);
   return toAuthUser(doc);
 }
 
@@ -124,6 +130,7 @@ export async function assignPortalUserToOrganization(
       },
     },
   );
+  await syncMembership(userId, input.organizationId, input.tenantId, input.role);
 }
 
 /**
@@ -158,6 +165,8 @@ export async function listAllPortalUsers(): Promise<AuthUser[]> {
 export async function setPortalUserRole(userId: string, role: UserRole): Promise<void> {
   const db = await getDb();
   await db.collection<PortalUserDocument>("users").updateOne({ _id: userId }, { $set: { role, updatedAt: new Date() } });
+  const user = await findPortalUserById(userId);
+  if (user) await syncMembership(userId, user.organizationId, user.tenantId, role);
 }
 
 /**
@@ -186,6 +195,8 @@ export async function updateUserTenant(userId: string, tenantId: string): Promis
   await db
     .collection<PortalUserDocument>("users")
     .updateOne({ _id: userId }, { $set: { tenantId, updatedAt: new Date() } });
+  const user = await findPortalUserById(userId);
+  if (user) await syncMembership(userId, user.organizationId, tenantId, user.role);
 }
 
 export async function verifyPortalUserEmail(email: string): Promise<void> {

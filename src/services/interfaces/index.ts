@@ -25,3 +25,4 @@ export * from "./notification-service";
 export * from "./api-access-service";
 export * from "./lakehouse-admin-service";
 export * from "./publication-admin-service";
+export * from "./pipeline-job-admin-service";

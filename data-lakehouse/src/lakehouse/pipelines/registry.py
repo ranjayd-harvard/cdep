@@ -19,7 +19,19 @@ from lakehouse.gold.products.event_performance import (
     GOLD_EVENT_PERFORMANCE_SCHEMA,
     build_event_performance,
 )
+from lakehouse.gold.products.test_metric_summary import (
+    GOLD_TEST_METRIC_SUMMARY_GRAIN_KEY,
+    GOLD_TEST_METRIC_SUMMARY_SCHEMA,
+    build_test_metric_summary,
+)
+from lakehouse.gold.products.ranjay_test_metric_summary import (
+    GOLD_RANJAY_TEST_METRIC_SUMMARY_GRAIN_KEY,
+    GOLD_RANJAY_TEST_METRIC_SUMMARY_SCHEMA,
+    build_ranjay_test_metric_summary,   
+)   
 from lakehouse.silver.models.event import SILVER_EVENT_SCHEMA
+from lakehouse.silver.models.test_metric import SILVER_TEST_METRIC_SCHEMA
+from lakehouse.silver.models.ranjay_test_metric import SILVER_RANJAY_TEST_METRIC_SCHEMA
 
 
 @dataclass(frozen=True)
@@ -62,6 +74,22 @@ SILVER_ENTITIES: dict[str, SilverEntityRegistration] = {
         schema=SILVER_EVENT_SCHEMA,
         date_column="event_date",
     ),
+    # Synthetic test entity -- see data-exchange-service/TEST-DataProduct-onboarding.MD.
+    "test_metric": SilverEntityRegistration(
+        entity="test_metric",
+        table_name="test_metric",
+        contract_id="test_metric",
+        schema=SILVER_TEST_METRIC_SCHEMA,
+        date_column="recorded_on",
+    ),
+    # Synthetic ranjay test entity -- see data-exchange-service/TEST-DataProduct-onboarding.MD.
+    "ranjay_test_metric": SilverEntityRegistration(
+        entity="ranjay_test_metric",
+        table_name="ranjay_test_metric",
+        contract_id="ranjay_test_metric",
+        schema=SILVER_RANJAY_TEST_METRIC_SCHEMA,
+        date_column="recorded_on",
+    ),    
 }
 
 BRONZE_TO_SILVER_PIPELINES: dict[str, BronzeToSilverRegistration] = {
@@ -93,6 +121,28 @@ BRONZE_TO_SILVER_PIPELINES: dict[str, BronzeToSilverRegistration] = {
         silver_entity="event",
         gold_products=["event-performance"],
     ),
+    # Synthetic test data product (cdep Dataset "Test Metrics") -- see
+    # data-exchange-service/TEST-DataProduct-onboarding.MD for the full
+    # onboarding runbook this registration is a worked example of.
+    "ds-test-metrics-789c08": BronzeToSilverRegistration(
+        data_product_id="ds-test-metrics-789c08",
+        pipeline_name="test-metrics-bronze-to-silver",
+        pipeline_version="1.0",
+        mapping_id="test-metrics-to-test-metric",
+        silver_entity="test_metric",
+        gold_products=["test-metric-summary"],
+    ),
+    # Synthetic ranjay test data product (cdep Dataset "Ranjay Test Metrics") -- see
+    # data-exchange-service/TEST-DataProduct-onboarding.MD for the full
+    # onboarding runbook this registration is a worked example of.
+    "ds-ranjay-test-metrics-b31235": BronzeToSilverRegistration(
+        data_product_id="ds-ranjay-test-metrics-b31235",
+        pipeline_name="ranjay-test-metrics-bronze-to-silver",
+        pipeline_version="1.0",
+        mapping_id="ranjay-test-metrics-to-ranjay-test-metric",
+        silver_entity="ranjay_test_metric",
+        gold_products=["ranjay-test-metric-summary"],
+    ),
 }
 
 SILVER_TO_GOLD_PIPELINES: dict[str, SilverToGoldRegistration] = {
@@ -106,5 +156,27 @@ SILVER_TO_GOLD_PIPELINES: dict[str, SilverToGoldRegistration] = {
         date_column="event_date",
         grain_key=GOLD_EVENT_PERFORMANCE_GRAIN_KEY,
         builder=build_event_performance,
+    ),
+    "test-metric-summary": SilverToGoldRegistration(
+        data_product_id="test-metric-summary",
+        pipeline_name="test-metric-summary-silver-to-gold",
+        pipeline_version="1.0",
+        source_silver_entity="test_metric",
+        gold_table_name="test_metric_summary",
+        schema=GOLD_TEST_METRIC_SUMMARY_SCHEMA,
+        date_column="recorded_on",
+        grain_key=GOLD_TEST_METRIC_SUMMARY_GRAIN_KEY,
+        builder=build_test_metric_summary,
+    ),
+    "ranjay-test-metric-summary": SilverToGoldRegistration(
+        data_product_id="ranjay-test-metric-summary",
+        pipeline_name="ranjay-test-metric-summary-silver-to-gold",
+        pipeline_version="1.0",
+        source_silver_entity="ranjay_test_metric",
+        gold_table_name="ranjay_test_metric_summary",
+        schema=GOLD_RANJAY_TEST_METRIC_SUMMARY_SCHEMA,
+        date_column="recorded_on",
+        grain_key=GOLD_RANJAY_TEST_METRIC_SUMMARY_GRAIN_KEY,
+        builder=build_ranjay_test_metric_summary,
     ),
 }

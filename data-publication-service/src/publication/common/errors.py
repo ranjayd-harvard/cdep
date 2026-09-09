@@ -68,6 +68,10 @@ class ExchangeServiceError(PublicationError):
     error_code = "EXCHANGE_SERVICE_ERROR"
 
 
+class CatalogServiceError(PublicationError):
+    error_code = "CATALOG_SERVICE_ERROR"
+
+
 class DuplicatePublicationError(PublicationError):
     """Not really an error -- raised internally to short-circuit into a
     SKIPPED_DUPLICATE outcome. See services/publication_service.py."""

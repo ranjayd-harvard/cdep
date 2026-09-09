@@ -254,6 +254,150 @@ export function publishFixture(input: {
   });
 }
 
+export interface PipelineJobResponse {
+  jobId: string;
+  status: string;
+}
+
+/**
+ * Enqueues a real Bronze->Silver->Gold->Publish pipeline run for a
+ * completed upload — the counterpart to `publishFixture` above, used when
+ * `env.demoFixturePublishEnabled` is false. data-exchange-service's own
+ * pipeline worker (not this app) decides when to actually run it; this call
+ * only durably records that it should happen. Same internal-key-only auth
+ * as `publishFixture`.
+ */
+export function enqueuePipelineJob(input: {
+  organizationId: string;
+  tenantId: string;
+  dataProductId: string;
+  exchangeId: string;
+}): Promise<PipelineJobResponse> {
+  return exchangeServiceFetch<PipelineJobResponse>("/internal/v1/pipeline-jobs", {
+    method: "POST",
+    internal: true,
+    body: input,
+  });
+}
+
+export interface PipelineJobDTO {
+  jobId: string;
+  organizationId: string;
+  tenantId: string;
+  dataProductId: string;
+  sourceExchangeId: string;
+  outboundExchangeId: string | null;
+  status: string;
+  currentStage: string | null;
+  attempts: number;
+  errorCode: string | null;
+  errorMessage: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ListPipelineJobsInternalResponse {
+  items: PipelineJobDTO[];
+}
+
+/**
+ * Superadmin-only, cross-tenant list of `exchange.pipeline_jobs` -- calls
+ * data-exchange-service's `/internal/v1/pipeline-jobs` (requireInternalApiKey,
+ * not a tenant JWT). Used only by `src/services/pipeline-job-admin/*` to
+ * back the "Pipeline Queue" tab on `/admin/lakehouse`.
+ */
+export function listPipelineJobsInternal(
+  filter: { status?: string; limit?: number } = {},
+): Promise<ListPipelineJobsInternalResponse> {
+  const params = new URLSearchParams();
+  if (filter.status) params.set("status", filter.status);
+  params.set("limit", String(filter.limit ?? 100));
+  return exchangeServiceFetch<ListPipelineJobsInternalResponse>(
+    `/internal/v1/pipeline-jobs?${params.toString()}`,
+    { internal: true },
+  );
+}
+
+/**
+ * Runs a PENDING job immediately (instead of waiting for the next poll
+ * tick), or re-enqueues+runs a FAILED/SUCCEEDED one -- calls
+ * data-exchange-service's `/internal/v1/pipeline-jobs/:jobId/run`. Blocks
+ * until the whole Bronze->Silver->Gold->Publish chain finishes, same
+ * synchronous-trigger shape as `triggerBronzeToSilver`/`triggerPublish` in
+ * `src/lib/lakehouse-service/client.ts` / `src/lib/publication-service/client.ts`.
+ */
+export function runPipelineJobInternal(jobId: string): Promise<PipelineJobDTO> {
+  return exchangeServiceFetch<PipelineJobDTO>(`/internal/v1/pipeline-jobs/${encodeURIComponent(jobId)}/run`, {
+    method: "POST",
+    internal: true,
+  });
+}
+
+/**
+ * Real-time counterparts to `data-exchange-service/scripts/sync-cdep-catalog.ts`
+ * — see `src/lib/exchange-service/catalog-sync.ts` for the orchestration
+ * that calls these right after a cdep catalog write, and
+ * `docs/exchange-service-integration.md` § "Keeping catalogs in sync" for
+ * why both this push path and the on-demand script exist. All four are
+ * internal-key-protected upserts; nothing here is ever reachable from
+ * client-side code.
+ */
+export function pushOrganization(organizationId: string, displayName: string): Promise<void> {
+  return exchangeServiceFetch<void>(`/internal/v1/catalog/organizations/${encodeURIComponent(organizationId)}`, {
+    method: "PUT",
+    internal: true,
+    body: { displayName },
+  });
+}
+
+export function pushTenant(tenantId: string, organizationId: string, displayName: string): Promise<void> {
+  return exchangeServiceFetch<void>(`/internal/v1/catalog/tenants/${encodeURIComponent(tenantId)}`, {
+    method: "PUT",
+    internal: true,
+    body: { organizationId, displayName },
+  });
+}
+
+export function pushMembership(
+  userId: string,
+  organizationId: string,
+  tenantId: string,
+  role: string,
+): Promise<void> {
+  return exchangeServiceFetch<void>(`/internal/v1/catalog/memberships/${encodeURIComponent(userId)}`, {
+    method: "PUT",
+    internal: true,
+    body: { organizationId, tenantId, role },
+  });
+}
+
+export function pushDataProduct(
+  datasetId: string,
+  name: string,
+  description: string,
+  currentSchemaVersion: string,
+): Promise<void> {
+  return exchangeServiceFetch<void>(`/internal/v1/catalog/data-products/${encodeURIComponent(datasetId)}`, {
+    method: "PUT",
+    internal: true,
+    body: { name, description, currentSchemaVersion },
+  });
+}
+
+export function pushEntitlement(
+  tenantId: string,
+  datasetId: string,
+  canUpload: boolean,
+  canDownload: boolean,
+): Promise<void> {
+  return exchangeServiceFetch<void>(
+    `/internal/v1/catalog/entitlements/${encodeURIComponent(tenantId)}/${encodeURIComponent(datasetId)}`,
+    { method: "PUT", internal: true, body: { canUpload, canDownload } },
+  );
+}
+
 /**
  * Uploads raw bytes to the signed URL returned by {@link initiateUpload}.
  *

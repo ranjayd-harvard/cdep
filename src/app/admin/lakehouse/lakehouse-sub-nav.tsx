@@ -5,6 +5,7 @@ const LINKS = [
   { href: "/admin/lakehouse", label: "Bronze Ingestion" },
   { href: "/admin/lakehouse/pipelines", label: "Pipelines (Silver/Gold)" },
   { href: "/admin/lakehouse/data-products", label: "Data Products (Gold)" },
+  { href: "/admin/lakehouse/queue", label: "Pipeline Queue" },
 ] as const;
 
 /**

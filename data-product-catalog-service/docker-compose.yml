@@ -1,0 +1,46 @@
+name: data-product-catalog-service
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: catalog
+      POSTGRES_PASSWORD: catalog
+      POSTGRES_DB: catalog
+    ports:
+      # Host port 5437: 5432 (host default), 5433 (data-exchange-service),
+      # 5434 (data-lakehouse), 5435 (an unrelated local project), and 5436
+      # (data-publication-service) are already taken on this machine.
+      # Internal port (used by other containers on this compose network)
+      # stays 5432.
+      - "5437:5432"
+    volumes:
+      - catalog-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U catalog -d catalog"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  catalog-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      # Host port 8092: 8080 (data-exchange-service), 8090 (data-lakehouse),
+      # and 8091 (data-publication-service) are already taken.
+      - "8092:8092"
+    environment:
+      NODE_ENV: development
+      PORT: 8092
+      DATABASE_URL: postgresql://catalog:catalog@postgres:5432/catalog
+      AUTH_MODE: development
+      INTERNAL_API_TOKEN: dev-internal-key-change-me
+      LOG_LEVEL: info
+    command: ["node", "dist/scripts/start.js"]
+
+volumes:
+  catalog-postgres-data:

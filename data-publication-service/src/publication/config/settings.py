@@ -68,6 +68,19 @@ class Settings(BaseSettings):
     # Contracts directory.
     contracts_dir: str = Field(default="./contracts/products")
 
+    # Data Product Catalog (Phase 5) integration. "local" (default) keeps
+    # today's behavior exactly as-is: publishedSchema/sla/quality/publication
+    # settings come from contracts_dir_path YAML only, so nothing breaks for
+    # anyone who hasn't stood up the catalog service. "catalog" overlays
+    # those same fields from the Catalog's ACTIVE-version contract, while
+    # `source.table` and `tenantScope` -- physical Gold wiring the Catalog
+    # deliberately doesn't own, see data-product-catalog-service/README.md
+    # "Publication Service / Portal integration" -- keep coming from the
+    # local YAML either way. See contracts/catalog_client.py.
+    contract_source: str = Field(default="local")
+    catalog_service_base_url: str = Field(default="http://localhost:8092")
+    catalog_service_api_key: str = Field(default="")
+
     # Inbound auth for THIS service's own internal HTTP API (src/publication/api/),
     # checked against the `x-internal-api-key` header -- a separate key from
     # exchange_service_api_key above, which is OUTBOUND auth this service

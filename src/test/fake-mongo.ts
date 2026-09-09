@@ -3,8 +3,8 @@
  * Mongo-backed repositories/services without a real database connection.
  * Supports just enough of the driver's filter/update/cursor shape (`$in`,
  * `$or`, `RegExp` equality, plain equality, `.sort()`, `.limit()`, `$set`,
- * `insertOne`/`updateOne`/`updateMany`/`findOneAndDelete`, `createIndex`
- * as a no-op) for those tests' queries.
+ * `insertOne`/`updateOne`/`updateMany`/`deleteOne`/`deleteMany`/
+ * `findOneAndDelete`, `createIndex` as a no-op) for those tests' queries.
  */
 export function createFakeDb(collections: Record<string, Array<Record<string, unknown>>>) {
   function matches(doc: Record<string, unknown>, filter: Record<string, unknown>): boolean {
@@ -100,6 +100,21 @@ export function createFakeDb(collections: Record<string, Array<Record<string, un
           }
           const [removed] = docs.splice(index, 1);
           return removed ?? null;
+        },
+        deleteOne: async (filter: Record<string, unknown> = {}) => {
+          const index = docs.findIndex((doc) => matches(doc, filter));
+          if (index === -1) {
+            return { deletedCount: 0 };
+          }
+          docs.splice(index, 1);
+          return { deletedCount: 1 };
+        },
+        deleteMany: async (filter: Record<string, unknown> = {}) => {
+          const matching = docs.filter((doc) => matches(doc, filter));
+          for (const doc of matching) {
+            docs.splice(docs.indexOf(doc), 1);
+          }
+          return { deletedCount: matching.length };
         },
         createIndex: async () => "index-created",
       };

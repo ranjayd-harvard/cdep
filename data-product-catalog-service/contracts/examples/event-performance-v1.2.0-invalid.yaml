@@ -1,0 +1,93 @@
+# Compatibility demo (spec §61) step 3: removes the published `venue_id`
+# field but only bumps the MINOR version. Expected result when registered:
+# rejected with BREAKING_CHANGE_REQUIRES_MAJOR_VERSION — a breaking change
+# must be expressed as a major version bump (see event-performance-v2.0.0.yaml).
+
+apiVersion: data-platform/v1
+
+kind: DataProduct
+
+metadata:
+  id: event-performance
+  name: Event Performance
+  version: "1.2.0"
+
+spec:
+
+  domain:
+    id: events
+
+  owner:
+    id: event-analytics
+    displayName: Event Analytics
+
+  description: Business-ready event performance data.
+
+  productType: DATASET
+
+  lifecycle:
+    status: ACTIVE
+
+  grain:
+    description: One row per event
+    keys:
+      - event_id
+
+  schema:
+
+    - name: event_id
+      type: string
+      required: true
+      grainKey: true
+      classification: INTERNAL
+
+    - name: event_date
+      type: date
+      required: true
+
+    - name: tickets_sold
+      type: long
+      required: false
+
+    - name: gross_revenue
+      type: "decimal(18,2)"
+      required: false
+
+    - name: revenue_per_ticket
+      type: "decimal(18,2)"
+      required: false
+
+    - name: discount_amount
+      type: "decimal(18,2)"
+      required: false
+
+  delivery:
+
+    methods:
+
+      - type: FILE
+        enabled: true
+        formats:
+          - PARQUET
+          - CSV
+
+      - type: API
+        enabled: true
+
+  sla:
+
+    freshnessMinutes: 240
+    availabilityTargetPercent: 99.9
+    maximumPublicationLatencyMinutes: 30
+
+  quality:
+
+    minimumCompletenessPercent: 99
+    grainUniqueRequired: true
+
+  publication:
+
+    defaultFormat: PARQUET
+    expirationHours: 168
+
+    filenamePattern: "event-performance-{date}-{publicationId}"

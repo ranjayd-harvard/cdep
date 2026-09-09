@@ -1,0 +1,42 @@
+# Bronze->Silver mapping: bronze.test_metrics -> silver.test_metric.
+# Configuration-driven: source column, target column, canonical type,
+# required-ness, default, optional named transform.
+
+version: "1.0"
+
+source:
+  table: bronze.test_metrics
+  dataProductId: ds-test-metrics-789c08
+
+target:
+  table: silver.test_metric
+  entity: test_metric
+
+keys:
+  businessKey:
+    - metric_id
+
+mapping:
+  metric_id:
+    source: metric_id
+    type: string
+    required: true
+
+  metric_label:
+    source: metric_label
+    type: string
+    required: true
+
+  recorded_on:
+    source: recorded_on
+    type: date
+    required: true
+
+  metric_value:
+    source: metric_value
+    type: "decimal(18,2)"
+    required: false
+
+lineage:
+  source_exchange_id: _exchange_id
+  source_ingestion_id: _ingestion_id

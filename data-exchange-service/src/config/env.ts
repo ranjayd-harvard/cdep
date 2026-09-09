@@ -26,6 +26,18 @@ const envSchema = z.object({
   INTERNAL_API_KEY: z.string().min(1).default("dev-internal-key-change-me"),
 
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
+
+  // Outbound calls this service makes to data-lakehouse and
+  // data-publication-service to run the real Bronze->Silver->Gold->Publish
+  // chain for queued pipeline jobs (see src/pipeline-worker/). Both
+  // optional, same opt-in pattern as everywhere else in this stack: when
+  // either is unset, the worker simply never starts and enqueued jobs stay
+  // PENDING instead of crashing anything.
+  LAKEHOUSE_SERVICE_URL: z.string().url().optional(),
+  LAKEHOUSE_SERVICE_INTERNAL_API_KEY: z.string().optional(),
+  PUBLICATION_SERVICE_URL: z.string().url().optional(),
+  PUBLICATION_SERVICE_INTERNAL_API_KEY: z.string().optional(),
+  PIPELINE_WORKER_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(15_000),
 });
 
 export type Env = z.infer<typeof envSchema>;

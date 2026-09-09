@@ -1,0 +1,43 @@
+# Data contract for the "ds-test-metrics-789c08" data product (cdep Dataset
+# "Test Metrics" -- see data-exchange-service/TEST-DataProduct-onboarding.MD).
+dataProductId: ds-test-metrics-789c08
+version: "1.0"
+owner: platform-data-team
+
+source:
+  formats:
+    - CSV
+    - JSON
+    - PARQUET
+
+bronze:
+  namespace: bronze
+  table: test_metrics
+
+csv:
+  header: true
+  delimiter: ","
+  encoding: UTF-8
+
+json:
+  lines: true
+  encoding: UTF-8
+
+schema:
+  mode: PERMISSIVE # STRICT | PERMISSIVE
+  fields:
+    - name: metric_id
+      type: string
+      required: true
+    - name: metric_label
+      type: string
+      required: true
+    - name: recorded_on
+      type: string
+      required: true
+    - name: metric_value
+      type: double
+      required: false
+
+quality:
+  rejectUnreadableRecords: true

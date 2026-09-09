@@ -10,9 +10,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "seed:users": "tsx --env-file=.env.local scripts/seed-users.ts",
-    "seed:catalog": "tsx --env-file=.env.local scripts/seed-catalog.ts"
+    "seed:catalog": "tsx --env-file=.env.local scripts/seed-catalog.ts",
+    "create-superuser": "tsx --env-file=.env.local scripts/create-superuser.ts"
   },
   "dependencies": {
+    "@xyflow/react": "^12.11.6",
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "lucide-react": "^1.37.0",
@@ -25,6 +27,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.6",

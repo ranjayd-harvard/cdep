@@ -87,6 +87,18 @@ services:
       AUTH_MODE: development
       INTERNAL_API_KEY: dev-internal-key-change-me
       LOG_LEVEL: info
+      # Outbound calls to data-lakehouse/data-publication-service for the
+      # pipeline worker (see src/pipeline-worker/). Those run in their own,
+      # separate docker-compose networks, so "host.docker.internal" is used
+      # the same way cdep's own portal container reaches this service --
+      # see their host-published ports (8090/8091) in their own
+      # docker-compose.yml files. Keys must match each target service's own
+      # LAKEHOUSE_INTERNAL_API_KEY / PUBLICATION_INTERNAL_API_KEY.
+      LAKEHOUSE_SERVICE_URL: http://host.docker.internal:8090
+      LAKEHOUSE_SERVICE_INTERNAL_API_KEY: dev-internal-key-change-me-lakehouse
+      PUBLICATION_SERVICE_URL: http://host.docker.internal:8091
+      PUBLICATION_SERVICE_INTERNAL_API_KEY: dev-internal-key-change-me-publication
+      PIPELINE_WORKER_POLL_INTERVAL_MS: 15000
     command: ["node", "dist/scripts/start.js"]
 
 volumes:

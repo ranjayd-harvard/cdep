@@ -3,6 +3,7 @@ import { MOCK_ORGANIZATIONS } from "../src/data/mocks/organizations";
 import { MOCK_TENANTS } from "../src/data/mocks/tenants";
 import { MOCK_DATA_PRODUCTS } from "../src/data/mocks/data-products";
 import { MOCK_DATASETS } from "../src/data/mocks/datasets";
+import { MOCK_DATA_PRODUCT_DATASETS } from "../src/data/mocks/data-product-datasets";
 import { MOCK_ENTITLEMENTS } from "../src/data/mocks/entitlements";
 import { ensureValidatedCollection } from "./ensure-collection";
 
@@ -54,13 +55,15 @@ async function main() {
     await upsertById(db, "tenants", MOCK_TENANTS);
     await upsertById(db, "dataProducts", MOCK_DATA_PRODUCTS);
     await upsertById(db, "datasets", MOCK_DATASETS);
+    await upsertById(db, "dataProductDatasets", MOCK_DATA_PRODUCT_DATASETS);
 
     await ensureValidatedCollection(db, "entitlements", ENTITLEMENTS_VALIDATOR);
     await upsertById(db, "entitlements", MOCK_ENTITLEMENTS);
 
     console.log(
       `Seeded ${MOCK_ORGANIZATIONS.length} organizations, ${MOCK_TENANTS.length} tenants, ` +
-        `${MOCK_DATA_PRODUCTS.length} data products, ${MOCK_DATASETS.length} datasets, and ` +
+        `${MOCK_DATA_PRODUCTS.length} data products, ${MOCK_DATASETS.length} datasets, ` +
+        `${MOCK_DATA_PRODUCT_DATASETS.length} data product/dataset associations, and ` +
         `${MOCK_ENTITLEMENTS.length} entitlements into "${dbName}".`,
     );
   } finally {

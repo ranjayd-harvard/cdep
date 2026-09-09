@@ -3,9 +3,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const {
   authMock,
   redirectMock,
-  createOrganizationMock,
   searchOrganizationsByNameMock,
-  createTenantMock,
   createMembershipRequestMock,
   assignPortalUserToOrganizationMock,
   acceptInvitationRecordMock,
@@ -14,9 +12,7 @@ const {
 } = vi.hoisted(() => ({
   authMock: vi.fn(),
   redirectMock: vi.fn(),
-  createOrganizationMock: vi.fn(),
   searchOrganizationsByNameMock: vi.fn(),
-  createTenantMock: vi.fn(),
   createMembershipRequestMock: vi.fn(),
   assignPortalUserToOrganizationMock: vi.fn(),
   acceptInvitationRecordMock: vi.fn(),
@@ -27,11 +23,7 @@ const {
 vi.mock("@/auth", () => ({ auth: authMock }));
 vi.mock("next/navigation", () => ({ redirect: redirectMock }));
 vi.mock("@/lib/organization-directory", () => ({
-  createOrganization: createOrganizationMock,
   searchOrganizationsByName: searchOrganizationsByNameMock,
-}));
-vi.mock("@/lib/tenant-directory", () => ({
-  createTenant: createTenantMock,
 }));
 vi.mock("@/lib/organization-membership-directory", () => {
   class DuplicateMembershipRequestError extends Error {}
@@ -51,7 +43,6 @@ vi.mock("@/lib/user-directory", () => ({
 
 import {
   acceptInvitation,
-  createOrganizationAndBecomeAdmin,
   declineInvitation,
   requestToJoinOrganization,
   searchOrganizations,
@@ -65,14 +56,6 @@ const SIGNED_IN_ORG_LESS = {
 const SIGNED_IN_WITH_ORG = {
   user: { id: "user-1", name: "Ada", email: "ada@example.com", organizationId: "org-existing" },
 };
-
-function makeFormData(fields: Record<string, string>) {
-  const formData = new FormData();
-  for (const [key, value] of Object.entries(fields)) {
-    formData.set(key, value);
-  }
-  return formData;
-}
 
 describe("onboarding actions", () => {
   beforeEach(() => {
@@ -136,40 +119,6 @@ describe("onboarding actions", () => {
 
       await expect(requestToJoinOrganization("org-1")).rejects.toThrow("database is down");
       expect(redirectMock).not.toHaveBeenCalledWith("/onboarding/pending");
-    });
-  });
-
-  describe("createOrganizationAndBecomeAdmin", () => {
-    it("returns a validation error for a blank organization name", async () => {
-      authMock.mockResolvedValue(SIGNED_IN_ORG_LESS);
-
-      const result = await createOrganizationAndBecomeAdmin({}, makeFormData({ displayName: "   " }));
-
-      expect(result.error).toBeTruthy();
-      expect(createOrganizationMock).not.toHaveBeenCalled();
-    });
-
-    it("creates the organization and its default tenant, promotes the caller to admin, then redirects", async () => {
-      authMock.mockResolvedValue(SIGNED_IN_ORG_LESS);
-      createOrganizationMock.mockResolvedValue({ id: "org-new", displayName: "Acme" });
-      createTenantMock.mockResolvedValue({ id: "tenant-new", isDefault: true });
-
-      await expect(
-        createOrganizationAndBecomeAdmin({}, makeFormData({ displayName: "Acme" })),
-      ).rejects.toThrow("REDIRECT");
-
-      expect(createOrganizationMock).toHaveBeenCalledWith({ displayName: "Acme" });
-      expect(createTenantMock).toHaveBeenCalledWith({
-        organizationId: "org-new",
-        displayName: "Default",
-        isDefault: true,
-      });
-      expect(assignPortalUserToOrganizationMock).toHaveBeenCalledWith("user-1", {
-        organizationId: "org-new",
-        tenantId: "tenant-new",
-        role: UserRole.CUSTOMER_ADMIN,
-      });
-      expect(redirectMock).toHaveBeenCalledWith("/dashboard");
     });
   });
 

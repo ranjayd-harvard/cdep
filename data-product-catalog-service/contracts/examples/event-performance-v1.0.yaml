@@ -1,0 +1,112 @@
+# Contract-as-Code source for the `event-performance` Data Product (spec §32).
+# This file is the authoring artifact — Git is the source of truth. Running
+# `npm run contract:register -- contracts/examples/event-performance-v1.0.yaml`
+# normalizes and registers it into the runtime Catalog; the Catalog then
+# becomes the operational/customer-facing system of record for this data.
+
+apiVersion: data-platform/v1
+
+kind: DataProduct
+
+metadata:
+  id: event-performance
+  name: Event Performance
+  version: "1.0.0"
+
+spec:
+
+  domain:
+    id: events
+
+  owner:
+    id: event-analytics
+    displayName: Event Analytics
+
+  description: Business-ready event performance data.
+
+  productType: DATASET
+
+  lifecycle:
+    status: ACTIVE
+
+  grain:
+    description: One row per event
+    keys:
+      - event_id
+
+  schema:
+
+    - name: event_id
+      type: string
+      required: true
+      grainKey: true
+      classification: INTERNAL
+
+    - name: venue_id
+      type: string
+      required: true
+      classification: INTERNAL
+
+    - name: event_date
+      type: date
+      required: true
+
+    - name: tickets_sold
+      type: long
+      required: false
+
+    - name: gross_revenue
+      type: "decimal(18,2)"
+      required: false
+
+    - name: revenue_per_ticket
+      type: "decimal(18,2)"
+      required: false
+
+  delivery:
+
+    methods:
+
+      - type: FILE
+        enabled: true
+        formats:
+          - PARQUET
+          - CSV
+
+      - type: API
+        enabled: true
+        api:
+          resource: events
+          filters:
+            - event_id
+            - venue_id
+            - event_date_from
+            - event_date_to
+            - updated_since
+          sorts:
+            - event_date
+            - event_id
+          defaultSort:
+            - event_date
+            - event_id
+          defaultPageSize: 100
+          maxPageSize: 500
+          maxResponseBytes: 5000000
+
+  sla:
+
+    freshnessMinutes: 240
+    availabilityTargetPercent: 99.9
+    maximumPublicationLatencyMinutes: 30
+
+  quality:
+
+    minimumCompletenessPercent: 99
+    grainUniqueRequired: true
+
+  publication:
+
+    defaultFormat: PARQUET
+    expirationHours: 168
+
+    filenamePattern: "event-performance-{date}-{publicationId}"
