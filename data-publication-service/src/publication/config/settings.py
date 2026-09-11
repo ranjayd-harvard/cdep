@@ -81,6 +81,15 @@ class Settings(BaseSettings):
     catalog_service_base_url: str = Field(default="http://localhost:8092")
     catalog_service_api_key: str = Field(default="")
 
+    # Phase 11 (spec §21/§9): re-validated immediately before publish, same
+    # discipline scheduling-service already follows for its own entitlement
+    # check -- closes the gap where a direct caller of this service's
+    # publish endpoint could bypass scheduling-service's own entitlement
+    # gate entirely. Empty base URL means "not configured" -- see
+    # entitlement/client.py.
+    subscription_service_base_url: str = Field(default="")
+    subscription_service_api_key: str = Field(default="")
+
     # Inbound auth for THIS service's own internal HTTP API (src/publication/api/),
     # checked against the `x-internal-api-key` header -- a separate key from
     # exchange_service_api_key above, which is OUTBOUND auth this service

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth } from "../../auth/customer-auth.middleware.js";
-import { getTenantContext } from "../../auth/authorization.js";
+import { getTenantContext, requirePermission } from "../../auth/authorization.js";
 import { withIdempotency } from "../../infrastructure/idempotency/with-idempotency.js";
 import {
   activateSubscription,
@@ -23,10 +23,12 @@ import type { DeliveryPreferenceInput } from "../../domain/delivery-preference.j
 const versionPolicyBodySchema = z.union([
   z.string(),
   z.object({
-    type: z.enum(["EXACT", "COMPATIBLE_MAJOR", "LATEST_ACTIVE"]),
+    type: z.enum(["EXACT", "COMPATIBLE_PATCH", "COMPATIBLE_MINOR", "PINNED_MAJOR", "LATEST_ACTIVE"]),
     value: z.string().nullable(),
   }),
 ]);
+
+const minorUpgradeBehaviorSchema = z.enum(["AUTO_UPGRADE_MINOR", "PIN_CURRENT", "MANUAL_APPROVAL"]);
 
 const deliveryBodySchema = z.object({
   method: z.enum(["FILE", "API"]),
@@ -61,11 +63,13 @@ function toDeliveryInput(body: z.infer<typeof deliveryBodySchema>): DeliveryPref
 const createSubscriptionSchema = z.object({
   data_product_id: z.string().min(1),
   version_policy: versionPolicyBodySchema,
+  minor_upgrade_behavior: minorUpgradeBehaviorSchema.optional(),
   delivery: deliveryBodySchema,
 });
 
 const patchSubscriptionSchema = z.object({
   version_policy: versionPolicyBodySchema.optional(),
+  minor_upgrade_behavior: minorUpgradeBehaviorSchema.optional(),
   delivery: deliveryBodySchema.optional(),
 });
 
@@ -81,7 +85,7 @@ export async function customerSubscriptionRoutes(app: FastifyInstance): Promise<
   app.post(
     "/v1/subscriptions",
     {
-      preHandler: [requireAuth()],
+      preHandler: [requireAuth(), requirePermission("subscription.manage")],
       schema: { tags: ["subscriptions"], summary: "Create a subscription to an entitled Data Product (spec §37)." },
     },
     async (request, reply) => {
@@ -98,6 +102,7 @@ export async function customerSubscriptionRoutes(app: FastifyInstance): Promise<
               tenantId: ctx.activeTenantId,
               dataProductId: body.data_product_id,
               versionPolicy: body.version_policy,
+              minorUpgradeBehavior: body.minor_upgrade_behavior,
               delivery: toDeliveryInput(body.delivery),
             },
             { actorType: "USER", actorId: ctx.userId, correlationId: request.correlationId },
@@ -112,7 +117,7 @@ export async function customerSubscriptionRoutes(app: FastifyInstance): Promise<
 
   app.get(
     "/v1/subscriptions",
-    { preHandler: [requireAuth()], schema: { tags: ["subscriptions"], summary: "List this tenant's subscriptions." } },
+    { preHandler: [requireAuth(), requirePermission("subscription.read")], schema: { tags: ["subscriptions"], summary: "List this tenant's subscriptions." } },
     async (request, reply) => {
       const ctx = getTenantContext(request);
       const subscriptions = await listSubscriptions(ctx.organizationId, ctx.activeTenantId);
@@ -129,7 +134,7 @@ export async function customerSubscriptionRoutes(app: FastifyInstance): Promise<
   app.get(
     "/v1/subscriptions/:subscriptionId",
     {
-      preHandler: [requireAuth()],
+      preHandler: [requireAuth(), requirePermission("subscription.read")],
       schema: { tags: ["subscriptions"], params: { type: "object", properties: { subscriptionId: { type: "string" } } } },
     },
     async (request, reply) => {
@@ -143,7 +148,7 @@ export async function customerSubscriptionRoutes(app: FastifyInstance): Promise<
   app.patch(
     "/v1/subscriptions/:subscriptionId",
     {
-      preHandler: [requireAuth()],
+      preHandler: [requireAuth(), requirePermission("subscription.manage")],
       schema: {
         tags: ["subscriptions"],
         summary: "Update version policy and/or delivery preference (spec §34) — explicit lifecycle transitions use dedicated endpoints, not this.",
@@ -156,13 +161,20 @@ export async function customerSubscriptionRoutes(app: FastifyInstance): Promise<
       const body = patchSubscriptionSchema.parse(request.body);
       const actor = { actorType: "USER" as const, actorId: ctx.userId, correlationId: request.correlationId };
 
-      if (!body.version_policy && !body.delivery) {
-        throw new AppError("VALIDATION_ERROR", "PATCH body must include version_policy and/or delivery.");
+      if (!body.version_policy && !body.delivery && !body.minor_upgrade_behavior) {
+        throw new AppError("VALIDATION_ERROR", "PATCH body must include version_policy, minor_upgrade_behavior, and/or delivery.");
       }
 
-      if (body.version_policy) {
+      if (body.version_policy || body.minor_upgrade_behavior) {
+        const current = await loadFullSubscription(ctx.organizationId, ctx.activeTenantId, subscriptionId);
         await updateSubscriptionVersionPolicyCommand(
-          { organizationId: ctx.organizationId, tenantId: ctx.activeTenantId, subscriptionId, versionPolicy: body.version_policy },
+          {
+            organizationId: ctx.organizationId,
+            tenantId: ctx.activeTenantId,
+            subscriptionId,
+            versionPolicy: body.version_policy ?? { type: current.version_policy.type, value: current.version_policy.value },
+            minorUpgradeBehavior: body.minor_upgrade_behavior,
+          },
           actor,
         );
       }
@@ -186,7 +198,7 @@ export async function customerSubscriptionRoutes(app: FastifyInstance): Promise<
     app.post(
       path,
       {
-        preHandler: [requireAuth()],
+        preHandler: [requireAuth(), requirePermission("subscription.manage")],
         schema: { tags: ["subscriptions"], params: { type: "object", properties: { subscriptionId: { type: "string" } } } },
       },
       async (request, reply) => {

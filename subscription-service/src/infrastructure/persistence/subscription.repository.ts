@@ -1,5 +1,5 @@
 import { AppError } from "../../common/errors/app-error.js";
-import type { SubscriptionStatus } from "../../config/constants.js";
+import type { MinorUpgradeBehavior, SubscriptionStatus, VersionPolicyType } from "../../config/constants.js";
 import type { Subscription } from "../../domain/subscription.js";
 import type { Queryable } from "./queryable.js";
 
@@ -9,8 +9,10 @@ interface SubscriptionRow {
   tenant_id: string;
   data_product_id: string;
   status: SubscriptionStatus;
-  version_policy_type: "EXACT" | "COMPATIBLE_MAJOR" | "LATEST_ACTIVE";
+  version_policy_type: VersionPolicyType;
   version_policy_value: string | null;
+  minor_upgrade_behavior: MinorUpgradeBehavior;
+  last_resolved_version: string | null;
   requested_at: Date;
   activated_at: Date | null;
   paused_at: Date | null;
@@ -29,6 +31,8 @@ function mapRow(row: SubscriptionRow): Subscription {
     dataProductId: row.data_product_id,
     status: row.status,
     versionPolicy: { type: row.version_policy_type, value: row.version_policy_value },
+    minorUpgradeBehavior: row.minor_upgrade_behavior,
+    lastResolvedVersion: row.last_resolved_version,
     requestedAt: row.requested_at,
     activatedAt: row.activated_at,
     pausedAt: row.paused_at,
@@ -137,8 +141,9 @@ export interface InsertSubscriptionInput {
   tenantId: string;
   dataProductId: string;
   status: SubscriptionStatus;
-  versionPolicyType: "EXACT" | "COMPATIBLE_MAJOR" | "LATEST_ACTIVE";
+  versionPolicyType: VersionPolicyType;
   versionPolicyValue: string | null;
+  minorUpgradeBehavior?: MinorUpgradeBehavior;
   activatedAt: Date | null;
   actorId: string;
 }
@@ -148,9 +153,9 @@ export async function insertSubscription(db: Queryable, input: InsertSubscriptio
     const { rows } = await db.query<SubscriptionRow>(
       `INSERT INTO subscriptions (
          subscription_id, organization_id, tenant_id, data_product_id,
-         status, version_policy_type, version_policy_value, activated_at,
+         status, version_policy_type, version_policy_value, minor_upgrade_behavior, activated_at,
          created_by, updated_by
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
        RETURNING *`,
       [
         input.subscriptionId,
@@ -160,6 +165,7 @@ export async function insertSubscription(db: Queryable, input: InsertSubscriptio
         input.status,
         input.versionPolicyType,
         input.versionPolicyValue,
+        input.minorUpgradeBehavior ?? "AUTO_UPGRADE_MINOR",
         input.activatedAt,
         input.actorId,
       ],
@@ -207,8 +213,9 @@ export async function updateSubscriptionStatus(db: Queryable, input: UpdateSubsc
 export interface UpdateVersionPolicyInput {
   subscriptionId: string;
   expectedVersion: number;
-  versionPolicyType: "EXACT" | "COMPATIBLE_MAJOR" | "LATEST_ACTIVE";
+  versionPolicyType: VersionPolicyType;
   versionPolicyValue: string | null;
+  minorUpgradeBehavior?: MinorUpgradeBehavior;
   actorId: string;
 }
 
@@ -216,13 +223,30 @@ export async function updateSubscriptionVersionPolicy(db: Queryable, input: Upda
   const { rows } = await db.query<SubscriptionRow>(
     `UPDATE subscriptions SET
        version_policy_type = $1, version_policy_value = $2,
-       updated_by = $3, updated_at = now(), version = version + 1
-     WHERE subscription_id = $4 AND version = $5
+       minor_upgrade_behavior = COALESCE($3, minor_upgrade_behavior),
+       updated_by = $4, updated_at = now(), version = version + 1
+     WHERE subscription_id = $5 AND version = $6
      RETURNING *`,
-    [input.versionPolicyType, input.versionPolicyValue, input.actorId, input.subscriptionId, input.expectedVersion],
+    [
+      input.versionPolicyType,
+      input.versionPolicyValue,
+      input.minorUpgradeBehavior ?? null,
+      input.actorId,
+      input.subscriptionId,
+      input.expectedVersion,
+    ],
   );
   if (rows.length === 0) {
     throw new AppError("CONCURRENT_MODIFICATION", `Subscription '${input.subscriptionId}' was modified concurrently.`);
   }
   return mapRow(rows[0] as SubscriptionRow);
+}
+
+// Phase 10 §32: updated after every successful "DELIVER" resolution — the
+// PIN_CURRENT/MANUAL_APPROVAL hint (spec §28) and the direct answer to
+// "what version is this subscription actually on right now." Not
+// optimistic-locked: this is a best-effort cache of the last resolution,
+// never a field a concurrent user-facing update races over.
+export async function updateLastResolvedVersion(db: Queryable, subscriptionId: string, resolvedVersion: string): Promise<void> {
+  await db.query(`UPDATE subscriptions SET last_resolved_version = $1 WHERE subscription_id = $2`, [resolvedVersion, subscriptionId]);
 }

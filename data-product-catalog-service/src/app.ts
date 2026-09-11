@@ -13,6 +13,10 @@ import { productRoutes } from "./modules/products/product.routes.js";
 import { versionRoutes } from "./modules/versions/version.routes.js";
 import { contractRoutes } from "./modules/contracts/contract.routes.js";
 import { registrationRoutes } from "./registration/registration.routes.js";
+import { dependencyRoutes } from "./modules/dependencies/dependency.routes.js";
+import { resolverRoutes } from "./modules/version-resolution/resolver.routes.js";
+import { migrationPlanRoutes } from "./modules/migrations/migration-plan.routes.js";
+import { RetirementBlockedError } from "./modules/lifecycle/retirement-guard.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -30,7 +34,23 @@ export async function buildApp(): Promise<FastifyInstance> {
     genReqId: () => randomUUID(),
   });
 
-  await app.register(cors, { origin: true });
+  // Phase 11 (spec §31/§33): an explicit allowlist, not `origin: true`
+  // (reflect-any-origin) — CORS_ALLOWED_ORIGINS is comma-separated.
+  const allowedOrigins = env.CORS_ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean);
+  await app.register(cors, { origin: allowedOrigins });
+
+  // Security headers (spec §33) — a conservative baseline appropriate for
+  // a JSON API with no rendered HTML: deny framing, disable content-type
+  // sniffing, minimize referrer leakage, and lock down an API surface that
+  // never needs powerful browser features.
+  app.addHook("onSend", async (_request, reply, payload) => {
+    reply.header("X-Content-Type-Options", "nosniff");
+    reply.header("X-Frame-Options", "DENY");
+    reply.header("Referrer-Policy", "no-referrer");
+    reply.header("Permissions-Policy", "geolocation=(), camera=(), microphone=()");
+    reply.header("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'");
+    return payload;
+  });
 
   await app.register(swagger, {
     openapi: {
@@ -62,9 +82,16 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.setErrorHandler((error: Error & { validation?: unknown; statusCode?: number }, request, reply) => {
     if (error instanceof AppError) {
       request.log.warn({ code: error.code, correlationId: request.correlationId }, error.message);
-      reply.code(error.statusCode).send({
+      const body: { error: Record<string, unknown> } = {
         error: { code: error.code, message: error.message, correlationId: request.correlationId },
-      });
+      };
+      // Phase 10 §22/§28: the one deliberate exception to the flat error
+      // envelope — retirement rejections carry the full structured
+      // blocker list, not just a message.
+      if (error instanceof RetirementBlockedError) {
+        body.error.blockers = error.blockers;
+      }
+      reply.code(error.statusCode).send(body);
       return;
     }
 
@@ -88,6 +115,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(versionRoutes);
   await app.register(contractRoutes);
   await app.register(registrationRoutes);
+  await app.register(dependencyRoutes);
+  await app.register(resolverRoutes);
+  await app.register(migrationPlanRoutes);
 
   return app;
 }

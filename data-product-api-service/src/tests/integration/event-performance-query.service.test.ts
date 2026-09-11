@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { runEventPerformanceQuery, type EventPerformanceQueryDeps } from "../../application/services/event-performance-query.service.js";
+import {
+  runEventPerformanceQuery,
+  runEventPerformanceQueryForExplicitVersion,
+  type EventPerformanceQueryDeps,
+} from "../../application/services/event-performance-query.service.js";
 import { AppError } from "../../common/errors/app-error.js";
 import type { SecurityContext } from "../../auth/request-context.js";
 import type { CatalogClient, ApiContract } from "../../ports/catalog-client.port.js";
@@ -20,7 +24,7 @@ const CONTRACT: ApiContract = {
   version: "1.0.0",
   lifecycleStatus: "ACTIVE",
   resource: "events",
-  publishedFields: [{ name: "event_id", type: "string", nullable: false }],
+  publishedFields: [{ name: "event_id", type: "string", nullable: false , maskingPolicy: null }],
   filters: [],
   sorts: ["event_date", "event_id"],
   defaultSort: ["event_date", "event_id"],
@@ -47,13 +51,19 @@ function makeDeps(overrides: Partial<{
   subscription: DeliveryContext | null;
   contract: ApiContract | null;
   servingResult: ServingQueryResult;
+  resolvedExplicit: { version: string; lifecycleStatus: string } | null;
 }> = {}): EventPerformanceQueryDeps {
   const entitlement = overrides.entitlement ?? { decision: "ALLOW", reason: "ACTIVE_ENTITLEMENT", entitlementId: "ent-1" };
   const subscription = ("subscription" in overrides ? overrides.subscription : ACTIVE_SUBSCRIPTION) as DeliveryContext | null;
   const contract = ("contract" in overrides ? overrides.contract : CONTRACT) as ApiContract | null;
   const servingResult = overrides.servingResult ?? EMPTY_RESULT;
+  const resolvedExplicit =
+    "resolvedExplicit" in overrides ? overrides.resolvedExplicit : contract ? { version: contract.version, lifecycleStatus: contract.lifecycleStatus } : null;
 
-  const catalogClient: CatalogClient = { getApiContract: async () => contract };
+  const catalogClient: CatalogClient = {
+    getApiContract: async () => contract,
+    resolveExactVersion: async () => resolvedExplicit ?? null,
+  };
   const entitlementClient: EntitlementClient = { evaluate: async () => entitlement };
   const subscriptionClient: SubscriptionClient = { resolveForScope: async () => subscription };
   const servingStore: ServingStore = { queryEventPerformanceEvents: async () => servingResult };
@@ -128,7 +138,7 @@ describe("runEventPerformanceQuery", () => {
       revenuePerTicket: "1.00",
     }));
     const deps = makeDeps({
-      contract: { ...CONTRACT, maxResponseBytes: 10, publishedFields: [{ name: "event_id", type: "string", nullable: false }] },
+      contract: { ...CONTRACT, maxResponseBytes: 10, publishedFields: [{ name: "event_id", type: "string", nullable: false , maskingPolicy: null }] },
       servingResult: { rows: bigRows, hasMore: false, lastRowSortValues: null, servingSnapshotId: "snap-1" },
     });
     await expect(runEventPerformanceQuery(deps, SECURITY_CONTEXT, "events", {})).rejects.toMatchObject(
@@ -138,5 +148,37 @@ describe("runEventPerformanceQuery", () => {
 
   it("propagates AppError from query validation unchanged (e.g. INVALID_FILTER)", async () => {
     await expect(runEventPerformanceQuery(makeDeps(), SECURITY_CONTEXT, "events", { not_a_real_filter: "x" })).rejects.toBeInstanceOf(AppError);
+  });
+});
+
+// Phase 10 §38: explicit-version route — resolves via Catalog's resolver
+// (EXACT/DELIVER) instead of the subscription's stored floating policy,
+// but still requires the same entitlement/active-subscription gate.
+describe("runEventPerformanceQueryForExplicitVersion", () => {
+  it("serves a specific version once entitlement + active subscription + resolution all succeed", async () => {
+    const deps = makeDeps({ resolvedExplicit: { version: "1.2.0", lifecycleStatus: "DEPRECATED" }, contract: { ...CONTRACT, version: "1.2.0" } });
+    const result = await runEventPerformanceQueryForExplicitVersion(deps, SECURITY_CONTEXT, "events", "1.2.0", {});
+    expect(result.product.version).toBe("1.2.0");
+  });
+
+  it("requires entitlement even when a version is named explicitly in the URL", async () => {
+    const deps = makeDeps({ entitlement: { decision: "DENY", reason: "NO_ENTITLEMENT", entitlementId: null } });
+    await expect(runEventPerformanceQueryForExplicitVersion(deps, SECURITY_CONTEXT, "events", "1.0.0", {})).rejects.toMatchObject(
+      expect.objectContaining({ code: "PRODUCT_NOT_FOUND" }),
+    );
+  });
+
+  it("requires an active API subscription even when a version is named explicitly", async () => {
+    const deps = makeDeps({ subscription: null });
+    await expect(runEventPerformanceQueryForExplicitVersion(deps, SECURITY_CONTEXT, "events", "1.0.0", {})).rejects.toMatchObject(
+      expect.objectContaining({ code: "PRODUCT_NOT_FOUND" }),
+    );
+  });
+
+  it("404s when the resolver rejects the version (DRAFT/RETIRED/BETA-without-opt-in)", async () => {
+    const deps = makeDeps({ resolvedExplicit: null });
+    await expect(runEventPerformanceQueryForExplicitVersion(deps, SECURITY_CONTEXT, "events", "9.9.9", {})).rejects.toMatchObject(
+      expect.objectContaining({ code: "PRODUCT_NOT_FOUND" }),
+    );
   });
 });

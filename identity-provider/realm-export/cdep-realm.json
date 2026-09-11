@@ -1,0 +1,129 @@
+{
+  "realm": "cdep",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "accessTokenLifespan": 900,
+  "roles": {
+    "realm": [
+      { "name": "CUSTOMER_USER" },
+      { "name": "CUSTOMER_ADMIN" },
+      { "name": "PRODUCT_CONSUMER" },
+      { "name": "PRODUCT_OWNER" },
+      { "name": "DATA_STEWARD" },
+      { "name": "PLATFORM_OPERATOR" },
+      { "name": "SECURITY_ADMIN" },
+      { "name": "PLATFORM_ADMIN" },
+      { "name": "SERVICE" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "cdep-services",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": true,
+      "redirectUris": ["http://localhost:3091/*"],
+      "webOrigins": ["http://localhost:3091"],
+      "defaultClientScopes": ["profile", "roles"],
+      "protocolMappers": [
+        {
+          "name": "organization_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "organization_id",
+            "claim.name": "organization_id",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "active_tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "active_tenant_id",
+            "claim.name": "active_tenant_id",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "cdep-services-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "cdep-services",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "tenant-a-customer",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "TenantA-Customer1!", "temporary": false }],
+      "realmRoles": ["CUSTOMER_USER", "PRODUCT_CONSUMER"],
+      "attributes": { "organization_id": ["org-e2e-a"], "active_tenant_id": ["tenant-e2e-a"] }
+    },
+    {
+      "username": "tenant-a-admin",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "TenantA-Admin1!", "temporary": false }],
+      "realmRoles": ["CUSTOMER_ADMIN", "PRODUCT_CONSUMER"],
+      "attributes": { "organization_id": ["org-e2e-a"], "active_tenant_id": ["tenant-e2e-a"] }
+    },
+    {
+      "username": "tenant-b-customer",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "TenantB-Customer1!", "temporary": false }],
+      "realmRoles": ["CUSTOMER_USER", "PRODUCT_CONSUMER"],
+      "attributes": { "organization_id": ["org-e2e-b"], "active_tenant_id": ["tenant-e2e-b"] }
+    },
+    {
+      "username": "product-owner",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "ProductOwner1!", "temporary": false }],
+      "realmRoles": ["PRODUCT_OWNER"],
+      "attributes": { "organization_id": ["org-platform"], "active_tenant_id": ["tenant-platform"] }
+    },
+    {
+      "username": "data-steward",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "DataSteward1!", "temporary": false }],
+      "realmRoles": ["DATA_STEWARD"],
+      "attributes": { "organization_id": ["org-platform"], "active_tenant_id": ["tenant-platform"] }
+    },
+    {
+      "username": "platform-operator",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "PlatformOperator1!", "temporary": false }],
+      "realmRoles": ["PLATFORM_OPERATOR"],
+      "attributes": { "organization_id": ["org-platform"], "active_tenant_id": ["tenant-platform"] }
+    },
+    {
+      "username": "security-admin",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "SecurityAdmin1!", "temporary": false }],
+      "realmRoles": ["SECURITY_ADMIN"],
+      "attributes": { "organization_id": ["org-platform"], "active_tenant_id": ["tenant-platform"] }
+    },
+    {
+      "username": "platform-admin",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "PlatformAdmin1!", "temporary": false }],
+      "realmRoles": ["PLATFORM_ADMIN"],
+      "attributes": { "organization_id": ["org-platform"], "active_tenant_id": ["tenant-platform"] }
+    }
+  ]
+}

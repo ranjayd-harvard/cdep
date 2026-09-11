@@ -45,6 +45,36 @@ const STATUS_MAP: Record<string, { label: string; color: BadgeColor }> = {
   SUCCEEDED: { label: "Succeeded", color: "green" },
   TERMINAL_FAILED: { label: "Failed", color: "red" },
   DEAD_LETTERED: { label: "Dead-lettered", color: "red" },
+  // Phase 9 observability-service — normalized operational status
+  // (operational_executions.overall_status).
+  RUNNING: { label: "Running", color: "blue" },
+  BLOCKED: { label: "Blocked", color: "red" },
+  LATE: { label: "Late", color: "yellow" },
+  UNKNOWN: { label: "Unknown", color: "gray" },
+  // SLA status (technical_sla_status / business_sla_status).
+  PASS: { label: "Pass", color: "green" },
+  FAIL: { label: "Fail", color: "red" },
+  AT_RISK: { label: "At risk", color: "yellow" },
+  NOT_APPLICABLE: { label: "N/A", color: "gray" },
+  // Health status (health_status).
+  HEALTHY: { label: "Healthy", color: "green" },
+  DEGRADED: { label: "Degraded", color: "yellow" },
+  UNHEALTHY: { label: "Unhealthy", color: "red" },
+  // Alert / incident state.
+  OPEN: { label: "Open", color: "red" },
+  ACKNOWLEDGED: { label: "Acknowledged", color: "yellow" },
+  RESOLVED: { label: "Resolved", color: "green" },
+  SUPPRESSED: { label: "Suppressed", color: "gray" },
+  // Phase 10 catalog-service — version lifecycle status
+  // (catalog.data_product_versions.lifecycle_status) and migration-plan
+  // status (catalog.migration_plans.status / migration_subscriptions.status
+  // — COMPLETED/BLOCKED/FAILED/SKIPPED already covered above).
+  DRAFT: { label: "Draft", color: "gray" },
+  BETA: { label: "Beta", color: "blue" },
+  RETIRED: { label: "Retired", color: "red" },
+  PLANNED: { label: "Planned", color: "gray" },
+  IN_PROGRESS: { label: "In progress", color: "yellow" },
+  MIGRATED: { label: "Migrated", color: "green" },
 };
 
 export function StatusBadge({ status }: { status: string }) {

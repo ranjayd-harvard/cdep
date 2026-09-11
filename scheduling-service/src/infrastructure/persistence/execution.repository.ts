@@ -111,8 +111,25 @@ export async function insertExecutionIfAbsent(db: Queryable, input: InsertExecut
   return existing;
 }
 
+// Internal-only lookup (spec §11/M5) — no tenant filter. Never call from a
+// customer-facing (requireAuth()) route; use findExecutionByIdForTenant
+// there instead, which is WHERE-filtered at the SQL layer rather than
+// relying on an app-layer post-fetch ownership check.
 export async function findExecutionById(db: Queryable, id: string): Promise<ScheduledExecution | null> {
   const { rows } = await db.query<ExecutionRow>(`SELECT * FROM scheduled_execution WHERE id = $1`, [id]);
+  return rows[0] ? mapRow(rows[0]) : null;
+}
+
+export async function findExecutionByIdForTenant(
+  db: Queryable,
+  organizationId: string,
+  tenantId: string,
+  id: string,
+): Promise<ScheduledExecution | null> {
+  const { rows } = await db.query<ExecutionRow>(
+    `SELECT * FROM scheduled_execution WHERE id = $1 AND organization_id = $2 AND tenant_id = $3`,
+    [id, organizationId, tenantId],
+  );
   return rows[0] ? mapRow(rows[0]) : null;
 }
 

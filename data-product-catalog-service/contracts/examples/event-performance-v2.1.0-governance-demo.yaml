@@ -1,0 +1,139 @@
+# Phase 11 mandatory governance leakage test fixture (spec §41): adds a
+# RESTRICTED, PII, customer-invisible `customer_email` field to demonstrate
+# the full chain — Catalog recognizes the governance metadata, registration
+# validation requires a deliberate masking/retention decision, FILE
+# publication excludes the field (data-publication-service's loader.py),
+# and API delivery excludes it too (data-product-api-service's
+# version.service.ts already filters publishedFields the same way).
+#
+# NOTE: this contract is a metadata/validation fixture. The physical
+# `customer_email` column does not exist in this platform's Gold/serving
+# tables today (no service in this repo ingests real customer PII) — this
+# file proves the *governance-metadata* path (registration validation,
+# contract-driven exclusion logic in both delivery methods) end-to-end; it
+# is not itself a live Gold-to-customer data flow.
+
+apiVersion: data-platform/v1
+
+kind: DataProduct
+
+metadata:
+  id: event-performance
+  name: Event Performance
+  version: "2.1.0"
+
+spec:
+
+  domain:
+    id: events
+
+  owner:
+    id: event-analytics
+    displayName: Event Analytics
+
+  description: Business-ready event performance data, with a RESTRICTED PII field for the Phase 11 governance demonstration.
+
+  productType: DATASET
+
+  lifecycle:
+    status: DRAFT
+
+  grain:
+    description: One row per event
+    keys:
+      - event_id
+
+  schema:
+
+    - name: event_id
+      type: string
+      required: true
+      grainKey: true
+      classification: INTERNAL
+
+    - name: venue_id
+      type: string
+      required: true
+      classification: INTERNAL
+
+    - name: event_date
+      type: date
+      required: true
+
+    - name: tickets_sold
+      type: long
+      required: false
+
+    - name: gross_revenue
+      type: "decimal(18,2)"
+      required: false
+
+    - name: revenue_per_ticket
+      type: "decimal(18,2)"
+      required: false
+
+    # The Phase 11 mandatory governance leakage test field (spec §41).
+    - name: customer_email
+      type: string
+      required: false
+      classification: RESTRICTED
+      pii: true
+      piiType: EMAIL
+      customerVisible: false
+      maskingPolicy: DENY
+      description: Purchaser email captured at checkout — never leaves this platform in any customer-facing artifact.
+
+  delivery:
+
+    methods:
+
+      - type: FILE
+        enabled: true
+        formats:
+          - PARQUET
+          - CSV
+
+      - type: API
+        enabled: true
+        api:
+          resource: events
+          filters:
+            - event_id
+            - venue_id
+            - event_date_from
+            - event_date_to
+            - updated_since
+          sorts:
+            - event_date
+            - event_id
+          defaultSort:
+            - event_date
+            - event_id
+          defaultPageSize: 100
+          maxPageSize: 500
+          maxResponseBytes: 5000000
+
+  sla:
+
+    freshnessMinutes: 240
+    availabilityTargetPercent: 99.9
+    maximumPublicationLatencyMinutes: 30
+
+  quality:
+
+    minimumCompletenessPercent: 99
+    grainUniqueRequired: true
+
+  publication:
+
+    defaultFormat: PARQUET
+    expirationHours: 168
+
+    filenamePattern: "event-performance-{date}-{publicationId}"
+
+  # Phase 11 (spec §17/§18) — product/version-level governance metadata.
+  governance:
+    dataClassification: RESTRICTED
+    retentionPolicyRef: CUSTOMER_PII_90_DAYS
+    complianceTags:
+      - contains-pii

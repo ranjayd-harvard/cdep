@@ -84,7 +84,7 @@ function baseContext(overrides: Partial<SubscriptionDeliveryContext> = {}): Subs
     tenantId: TENANT,
     dataProductId: PRODUCT,
     status: "ACTIVE",
-    versionPolicy: { type: "COMPATIBLE_MAJOR", value: "1" },
+    versionPolicy: { type: "COMPATIBLE_MINOR", value: "1" },
     resolvedProductVersion: null,
     delivery: {
       method: "FILE",
@@ -141,7 +141,7 @@ async function createAndClaim(executionKey: string, subscriptionId = "sub-pipeli
     dataProductId: PRODUCT,
     reason: "SCHEDULED",
     scheduledFor: new Date("2026-09-09T06:00:00.000Z"),
-    requestedVersionPolicyType: "COMPATIBLE_MAJOR",
+    requestedVersionPolicyType: "COMPATIBLE_MINOR",
     requestedVersionPolicyValue: "1",
     maxAttempts: 5,
   });

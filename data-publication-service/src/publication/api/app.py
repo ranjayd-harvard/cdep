@@ -7,6 +7,7 @@ from fastapi import FastAPI
 
 from publication.api.routes import router
 from publication.config.settings import get_settings
+from publication.entitlement.client import EntitlementClient
 from publication.exchange.client import ExchangeServiceClient
 from publication.metadata.engine import get_engine
 from publication.metadata.migrations import run_migrations
@@ -29,6 +30,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         settings=settings,
         repository=PublicationRepository(engine),
         exchange_client=ExchangeServiceClient(settings),
+        entitlement_client=EntitlementClient(settings),
     )
     yield
 

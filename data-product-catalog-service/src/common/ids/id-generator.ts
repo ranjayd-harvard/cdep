@@ -19,3 +19,10 @@ export const generateDeliveryMethodId = () => generate(ID_PREFIXES.deliveryMetho
 export const generatePublicationPolicyId = () => generate(ID_PREFIXES.publicationPolicy);
 export const generateRegistrationEventId = () => generate(ID_PREFIXES.registrationEvent);
 export const generateCorrelationId = () => generate(ID_PREFIXES.correlation);
+export const generateCompatibilityResultId = () => generate(ID_PREFIXES.compatibilityResult);
+export const generateVersionDependencyId = () => generate(ID_PREFIXES.versionDependency);
+export const generateMigrationPlanId = () => generate(ID_PREFIXES.migrationPlan);
+export const generateMigrationSubscriptionId = () => generate(ID_PREFIXES.migrationSubscription);
+export const generateVersionApprovalId = () => generate(ID_PREFIXES.versionApproval);
+export const generateBetaOptInId = () => generate(ID_PREFIXES.betaOptIn);
+export const generateAuditEventId = () => generate(ID_PREFIXES.auditEvent);

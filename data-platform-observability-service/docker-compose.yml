@@ -1,0 +1,104 @@
+name: data-platform-observability-service
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: observability
+      POSTGRES_PASSWORD: observability
+      POSTGRES_DB: observability
+    ports:
+      # Host port 5441: 5432 (host default), 5433 (data-exchange-service),
+      # 5434 (data-lakehouse), 5435 (an unrelated local project), 5436
+      # (data-publication-service), 5437 (data-product-catalog-service),
+      # 5438 (subscription-service), 5439 (scheduling-service), and 5440
+      # (serving-projection-service) are already taken on this machine.
+      # Internal port stays 5432.
+      - "5441:5432"
+    volumes:
+      - observability-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U observability -d observability"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  data-platform-observability-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      # Host port 8097: 8080 (data-exchange-service), 8090 (data-lakehouse),
+      # 8091 (data-publication-service), 8092 (data-product-catalog-service),
+      # 8093 (subscription-service), 8094 (scheduling-service), 8095
+      # (data-product-api-service), and 8096 (serving-projection-service)
+      # are already taken.
+      - "8097:8097"
+    environment:
+      NODE_ENV: development
+      PORT: 8097
+      DATABASE_URL: postgresql://observability:observability@postgres:5432/observability
+      AUTH_MODE: development
+      INTERNAL_API_TOKEN: dev-internal-key-change-me
+      # data-lakehouse runs in its own isolated compose network on the
+      # host, reached via host.docker.internal — same pattern
+      # data-publication-service already uses for this exact database.
+      LAKEHOUSE_METADATA_DATABASE_URL: postgresql://lakehouse:lakehouse@host.docker.internal:5434/lakehouse
+      EXCHANGE_SERVICE_URL: http://host.docker.internal:8080
+      EXCHANGE_SERVICE_INTERNAL_API_KEY: dev-internal-key-change-me
+      EXCHANGE_SERVICE_TIMEOUT_SECONDS: 5
+      CATALOG_SERVICE_URL: http://host.docker.internal:8092
+      CATALOG_SERVICE_INTERNAL_API_KEY: dev-internal-key-change-me
+      CATALOG_SERVICE_TIMEOUT_SECONDS: 5
+      SUBSCRIPTION_SERVICE_URL: http://host.docker.internal:8093
+      SUBSCRIPTION_SERVICE_INTERNAL_API_KEY: dev-internal-key-change-me
+      SUBSCRIPTION_SERVICE_TIMEOUT_SECONDS: 5
+      SCHEDULING_SERVICE_URL: http://host.docker.internal:8094
+      SCHEDULING_SERVICE_INTERNAL_API_KEY: dev-internal-key-change-me
+      SCHEDULING_SERVICE_TIMEOUT_SECONDS: 5
+      PUBLICATION_SERVICE_URL: http://host.docker.internal:8091
+      PUBLICATION_SERVICE_INTERNAL_API_KEY: dev-internal-key-change-me-publication
+      PUBLICATION_SERVICE_TIMEOUT_SECONDS: 30
+      SERVING_PROJECTION_SERVICE_URL: http://host.docker.internal:8096
+      SERVING_PROJECTION_SERVICE_INTERNAL_API_KEY: dev-internal-key-change-me-serving
+      SERVING_PROJECTION_SERVICE_TIMEOUT_SECONDS: 5
+      POLL_ENABLED: "true"
+      POLL_INTERVAL_SECONDS_EXCHANGE: 15
+      POLL_INTERVAL_SECONDS_CATALOG: 60
+      POLL_INTERVAL_SECONDS_SUBSCRIPTION: 30
+      POLL_INTERVAL_SECONDS_SCHEDULING: 15
+      POLL_INTERVAL_SECONDS_PUBLICATION: 15
+      POLL_INTERVAL_SECONDS_LAKEHOUSE: 15
+      POLL_INTERVAL_SECONDS_SERVING_PROJECTION: 30
+      RECONCILE_INTERVAL_SECONDS: 120
+      CORRELATION_WINDOW_MINUTES: 120
+      STUCK_RUN_THRESHOLD_MINUTES_DEFAULT: 30
+      SLA_STAGE_TARGET_MINUTES_EXCHANGE_RECEIVED: 5
+      SLA_STAGE_TARGET_MINUTES_EXCHANGE_VALIDATION: 5
+      SLA_STAGE_TARGET_MINUTES_BRONZE_INGESTION: 10
+      SLA_STAGE_TARGET_MINUTES_SILVER_TRANSFORMATION: 15
+      SLA_STAGE_TARGET_MINUTES_GOLD_PRODUCT_BUILD: 15
+      SLA_STAGE_TARGET_MINUTES_QUALITY_VALIDATION: 5
+      SLA_STAGE_TARGET_MINUTES_PUBLICATION: 15
+      SLA_STAGE_TARGET_MINUTES_OUTBOUND_EXCHANGE: 5
+      SLA_STAGE_TARGET_MINUTES_FILE_DELIVERY: 5
+      SLA_STAGE_TARGET_MINUTES_API_DELIVERY: 5
+      HEALTH_WEIGHT_SLA: 0.30
+      HEALTH_WEIGHT_FRESHNESS: 0.20
+      HEALTH_WEIGHT_QUALITY: 0.20
+      HEALTH_WEIGHT_AVAILABILITY: 0.15
+      HEALTH_WEIGHT_PUBLICATION_SUCCESS: 0.10
+      HEALTH_WEIGHT_RETRY_FAILURE: 0.05
+      ALERT_SUPPRESSION_WINDOW_MINUTES: 60
+      INCIDENT_CORRELATION_WINDOW_MINUTES: 30
+      NO_DATA_WINDOW_MINUTES_DEFAULT: 1440
+      LOG_LEVEL: info
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["node", "dist/scripts/start.js"]
+
+volumes:
+  observability-postgres-data:

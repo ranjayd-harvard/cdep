@@ -105,4 +105,19 @@ export const env = {
   // means the panel simply doesn't render.
   schedulingServiceUrl: process.env.SCHEDULING_SERVICE_URL ?? "",
   schedulingServiceEnabled: Boolean(process.env.SCHEDULING_SERVICE_URL),
+  // Server-only. Base URL of data-platform-observability-service's own HTTP
+  // API (Phase 9), e.g. "http://localhost:8097" outside Docker. Backs the
+  // customer-facing product-status badge (`/v1/customer/*`, bearer-token,
+  // same auth bridge as subscriptionServiceUrl) and the superadmin-only
+  // `/admin/observability` dashboard (`/internal/v1/*`, internal API key +
+  // actor headers, same pattern as lakehouseServiceInternalApiKey). Same
+  // opt-in, non-breaking pattern as every other *ServiceUrl above: unset
+  // means the badge/page simply doesn't render.
+  observabilityServiceUrl: process.env.OBSERVABILITY_SERVICE_URL ?? "",
+  observabilityServiceEnabled: Boolean(process.env.OBSERVABILITY_SERVICE_URL),
+  // Sent as `x-internal-api-key` (plus x-actor-* headers) to
+  // data-platform-observability-service's /internal/v1/* routes — a
+  // separate key/service from every other *ServiceInternalApiKey above.
+  // Never sent to the browser.
+  observabilityServiceInternalApiKey: process.env.OBSERVABILITY_SERVICE_INTERNAL_API_KEY ?? "",
 } as const;

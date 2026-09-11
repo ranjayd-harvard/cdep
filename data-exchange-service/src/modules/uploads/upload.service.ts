@@ -176,6 +176,30 @@ export async function completeUpload(
   const checksum = sha256Hex(object.body);
   const actualSizeBytes = head.contentLength ?? object.contentLength;
 
+  // Phase 11 (spec §10.34): the presigned PUT URL cannot itself enforce a
+  // size limit, so the declared sizeBytes check at initiate-time (line ~39
+  // above) is not sufficient on its own — a client can PUT arbitrarily more
+  // bytes than it declared. This is the actual enforcement point, against
+  // the real object once it exists in storage. An oversized object is
+  // deleted immediately (never persisted as a completed exchange) and the
+  // exchange fails rather than silently accepting it.
+  if (actualSizeBytes > env.MAX_UPLOAD_SIZE_BYTES) {
+    await objectStorage.deleteObject(dataFile.bucket_name, dataFile.object_key);
+    await updateExchangeStatus(exchangeId, ctx.organizationId, ctx.activeTenantId, "FAILED");
+    await appendExchangeEvent({
+      exchangeId,
+      eventType: "VALIDATION_FAILED",
+      fromStatus: exchange.status,
+      toStatus: "FAILED",
+      actorType: "SYSTEM",
+      eventData: { reason: "FILE_TOO_LARGE", actualSizeBytes, maxAllowedBytes: env.MAX_UPLOAD_SIZE_BYTES },
+    });
+    throw new AppError(
+      "FILE_TOO_LARGE",
+      `Uploaded object is ${actualSizeBytes} bytes, exceeding the maximum allowed size of ${env.MAX_UPLOAD_SIZE_BYTES} bytes.`,
+    );
+  }
+
   await createExchangeFile({
     exchangeFileId: generateFileId(),
     exchangeId,

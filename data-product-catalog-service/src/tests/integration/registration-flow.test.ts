@@ -19,7 +19,7 @@ describe("contract registration → activation → lifecycle", () => {
     return {
       apiVersion: "data-platform/v1",
       kind: "DataProduct",
-      metadata: { id: productId, name: "Test Product", version },
+      metadata: { id: productId, name: `Test Product ${suffix}`, version },
       spec: {
         domain: { id: domainId },
         owner: { id: ownerId, displayName: "Test Owner" },
@@ -161,14 +161,25 @@ describe("contract registration → activation → lifecycle", () => {
     expect(res.json().error.code).toBe("VERSION_NOT_RETIRABLE");
   });
 
-  it("retires a deprecated (non-active) version freely", async () => {
-    const res = await app.inject({ method: "POST", url: `/internal/v1/data-products/${productId}/versions/1.0.0/retire` });
+  it("blocks retiring a deprecated version until its grace period completes, then retires with an override", async () => {
+    // 1.0.0 was deprecated via supersession (1.1.0's activation), which
+    // sets a fresh default grace period (spec §19/§21 point 6) — retiring
+    // immediately is now a real blocker, not "freely" as pre-Phase-10.
+    const blocked = await app.inject({ method: "POST", url: `/internal/v1/data-products/${productId}/versions/1.0.0/retire` });
+    expect(blocked.statusCode).toBe(409);
+    expect(blocked.json().error.blockers.some((b: { type: string }) => b.type === "GRACE_PERIOD_NOT_COMPLETE")).toBe(true);
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/internal/v1/data-products/${productId}/versions/1.0.0/retire`,
+      payload: { force: true, reason: "test override: grace period intentionally skipped" },
+    });
     expect(res.statusCode).toBe(200);
     expect(res.json().lifecycleStatus).toBe("RETIRED");
   });
 
   it("finds the product via search", async () => {
-    const res = await app.inject({ method: "GET", url: `/v1/data-products?search=${encodeURIComponent("Test Product")}` });
+    const res = await app.inject({ method: "GET", url: `/v1/data-products?search=${encodeURIComponent(`Test Product ${suffix}`)}` });
     expect(res.statusCode).toBe(200);
     const ids = res.json().items.map((p: { dataProductId: string }) => p.dataProductId);
     expect(ids).toContain(productId);

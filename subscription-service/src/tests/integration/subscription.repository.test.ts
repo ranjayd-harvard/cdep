@@ -29,7 +29,7 @@ function baseInput(overrides: Partial<Parameters<typeof insertSubscription>[1]> 
     tenantId: randomUUID(),
     dataProductId: "event-performance",
     status: "ACTIVE" as const,
-    versionPolicyType: "COMPATIBLE_MAJOR" as const,
+    versionPolicyType: "COMPATIBLE_MINOR" as const,
     versionPolicyValue: "1",
     activatedAt: new Date(),
     actorId: "usr-1",

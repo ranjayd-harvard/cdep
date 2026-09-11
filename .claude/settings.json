@@ -46,7 +46,13 @@
       "Bash(pip3 show *)",
       "Bash(.venv/bin/python --version)",
       "Bash(.venv/bin/pip show *)",
-      "Bash(.venv/bin/python -m pytest --version)"
+      "Bash(.venv/bin/python -m pytest --version)",
+      "Bash(xargs ls)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3091/admin/catalog)",
+      "Bash(curl -s -I http://localhost:3091/admin/catalog)",
+      "Bash(python3 -m pytest tests/unit/test_contract_loader.py -q)",
+      "Bash(.venv/bin/python -m pytest tests/unit/test_contract_loader.py -q)",
+      "Bash(.venv/bin/python -m pytest -q)"
     ],
     "additionalDirectories": [
       "/Users/ranjay.kumar/Documents/Ranjay/agentic-ai/react/cdep/src/app/api/downloads/[fileId]"

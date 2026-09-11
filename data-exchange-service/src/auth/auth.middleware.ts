@@ -1,4 +1,5 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
+import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
 import { AppError } from "../common/errors/app-error.js";
 import { env } from "../config/env.js";
 import { ROLES, type Role } from "../config/constants.js";
@@ -38,6 +39,8 @@ function toRequestContext(payload: DevTokenPayload): RequestContext {
     organizationId: payload.organization_id,
     activeTenantId: payload.active_tenant_id,
     role: payload.role,
+    roles: [payload.role],
+    authenticationMethod: "dev",
   };
 }
 
@@ -60,16 +63,59 @@ function decodeDevToken(token: string): DevTokenPayload {
   }
 }
 
-function verifyProductionJwt(_token: string): RequestContext {
-  // AGENTS.md section 4/51 explicitly scopes out implementing an identity
-  // provider. Wiring real verification means: fetch the tenant's OIDC
-  // issuer JWKS, verify signature + exp + aud/iss, then map claims to
-  // RequestContext exactly as toRequestContext() does above. Left
-  // unimplemented on purpose for this phase.
-  throw new AppError("UNAUTHENTICATED", "OIDC verification is not configured for this deployment.");
+// Lazily constructed: dev-only deployments never set OIDC_JWKS_URI, and
+// createRemoteJWKSet must not be called with an invalid/missing URL.
+const jwks = env.OIDC_JWKS_URI ? createRemoteJWKSet(new URL(env.OIDC_JWKS_URI)) : undefined;
+
+function rolesFromClaim(payload: JWTPayload): Role[] {
+  const claimed = (payload.realm_access as { roles?: unknown } | undefined)?.roles;
+  if (!Array.isArray(claimed)) return [];
+  return claimed.filter((r): r is Role => typeof r === "string" && isRole(r));
 }
 
-export function authenticate(request: FastifyRequest, _reply: FastifyReply): void {
+async function verifyProductionJwt(token: string): Promise<RequestContext> {
+  if (!jwks || !env.OIDC_ISSUER_URL || !env.OIDC_AUDIENCE) {
+    throw new AppError("UNAUTHENTICATED", "OIDC verification is not configured for this deployment.");
+  }
+
+  let payload: JWTPayload;
+  try {
+    ({ payload } = await jwtVerify(token, jwks, {
+      issuer: env.OIDC_ISSUER_URL,
+      audience: env.OIDC_AUDIENCE,
+      algorithms: ["RS256"],
+    }));
+  } catch {
+    // Signature invalid, expired, wrong issuer/audience, or unsupported alg —
+    // never distinguish these to the caller (spec §7/§32).
+    throw new AppError("UNAUTHENTICATED", "Invalid or expired token.");
+  }
+
+  const organizationId = payload.organization_id;
+  const activeTenantId = payload.active_tenant_id;
+  const roles = rolesFromClaim(payload);
+  const [primaryRole] = roles;
+
+  if (
+    typeof payload.sub !== "string" ||
+    typeof organizationId !== "string" ||
+    typeof activeTenantId !== "string" ||
+    !primaryRole
+  ) {
+    throw new AppError("UNAUTHENTICATED", "Token is missing required claims.");
+  }
+
+  return {
+    userId: payload.sub,
+    organizationId,
+    activeTenantId,
+    role: primaryRole,
+    roles,
+    authenticationMethod: "oidc",
+  };
+}
+
+export async function authenticate(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
   const header = request.headers.authorization;
 
   if (env.AUTH_MODE === "development") {
@@ -86,11 +132,11 @@ export function authenticate(request: FastifyRequest, _reply: FastifyReply): voi
     throw new AppError("UNAUTHENTICATED", "Missing Authorization header.");
   }
   const token = header.replace(/^Bearer\s+/i, "");
-  request.requestContext = verifyProductionJwt(token);
+  request.requestContext = await verifyProductionJwt(token);
 }
 
 export function requireAuth() {
   return async (request: FastifyRequest, reply: FastifyReply) => {
-    authenticate(request, reply);
+    await authenticate(request, reply);
   };
 }

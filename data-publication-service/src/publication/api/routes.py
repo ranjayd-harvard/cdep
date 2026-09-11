@@ -123,10 +123,19 @@ def trigger_publish(body: TriggerPublishIn, request: Request) -> PublicationOutc
         ) from exc
 
     service = request.app.state.publication_service
-    outcome = service.publish(
-        gold_ready,
-        requested_format=body.format,
-        republish=body.republish,
-        external_idempotency_key=body.external_idempotency_key,
-    )
+    try:
+        outcome = service.publish(
+            gold_ready,
+            requested_format=body.format,
+            republish=body.republish,
+            external_idempotency_key=body.external_idempotency_key,
+        )
+    except PublicationError as exc:
+        # Raised before any publication run row exists (spec §32: a safe,
+        # structured error rather than an unhandled 500) -- currently only
+        # ENTITLEMENT_DENIED and UNSUPPORTED_FORMAT reach this path; every
+        # other failure mode is caught inside publish() and returned as a
+        # FAILED PublicationOutcome instead.
+        status_code = 403 if exc.error_code == "ENTITLEMENT_DENIED" else 400
+        raise HTTPException(status_code=status_code, detail={"error_code": exc.error_code, "message": exc.message}) from exc
     return _outcome_out(outcome)

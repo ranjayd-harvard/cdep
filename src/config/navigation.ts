@@ -13,6 +13,8 @@ import {
   Layers,
   Share2,
   Boxes,
+  Activity,
+  GitBranch,
   type LucideIcon,
 } from "lucide-react";
 
@@ -49,5 +51,7 @@ export const ADMIN_NAV: NavItem[] = [
   { label: "Data Products", href: "/admin/data-products", icon: Database },
   { label: "Data Relationships", href: "/admin/data-relationships", icon: Share2 },
   { label: "Lakehouse Ingestion", href: "/admin/lakehouse", icon: Layers },
+  { label: "Observability", href: "/admin/observability", icon: Activity },
+  { label: "Product Versions", href: "/admin/catalog", icon: GitBranch },
   { label: "Platform Settings", href: "/admin/settings", icon: Settings },
 ];

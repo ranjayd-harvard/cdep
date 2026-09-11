@@ -15,3 +15,5 @@ export const generateEventId = () => generate(ID_PREFIXES.event);
 export const generateValidationId = () => generate(ID_PREFIXES.validation);
 export const generateCorrelationId = () => generate(ID_PREFIXES.correlation);
 export const generatePipelineJobId = () => generate(ID_PREFIXES.pipelineJob);
+export const generateDeletionRequestId = () => generate(ID_PREFIXES.deletionRequest);
+export const generateAuditEventId = () => generate(ID_PREFIXES.auditEvent);

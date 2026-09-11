@@ -112,7 +112,7 @@ export class ExecutionProcessor {
     let resolved;
     try {
       resolved = await catalogClient.resolveVersionPolicy(execution.dataProductId, {
-        type: context.versionPolicy.type as "EXACT" | "COMPATIBLE_MAJOR" | "LATEST_ACTIVE",
+        type: context.versionPolicy.type as "EXACT" | "COMPATIBLE_PATCH" | "COMPATIBLE_MINOR" | "PINNED_MAJOR" | "LATEST_ACTIVE",
         value: context.versionPolicy.value,
       });
     } catch (err) {

@@ -102,7 +102,7 @@ describe("Phase 6 end-to-end: Vobis Org / Default Tenant / Event Performance", (
     const read = await app.inject({ method: "GET", url: `/v1/subscriptions/${subscriptionId}`, headers: { authorization: `Bearer ${token}` } });
     expect(read.json()).toMatchObject({
       status: "ACTIVE",
-      version_policy: { type: "COMPATIBLE_MAJOR", value: "1" },
+      version_policy: { type: "COMPATIBLE_MINOR", value: "1" },
       delivery: { method: "FILE", format: "PARQUET", frequency: "DAILY", delivery_time: "06:00:00", timezone: "UTC", retention_days: 7 },
     });
 
@@ -149,7 +149,7 @@ describe("Phase 6 end-to-end: Vobis Org / Default Tenant / Event Performance", (
       tenant_id: TENANT_ID,
       data_product_id: DATA_PRODUCT_ID,
       status: "ACTIVE",
-      version_policy: { type: "COMPATIBLE_MAJOR", value: "1" },
+      version_policy: { type: "COMPATIBLE_MINOR", value: "1" },
       resolved_product_version: { version: "1.1.0" },
       delivery: { method: "FILE", format: "PARQUET", frequency: "DAILY", retention_days: 7 },
     });

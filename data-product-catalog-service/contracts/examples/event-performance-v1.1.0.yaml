@@ -78,6 +78,23 @@ spec:
 
       - type: API
         enabled: true
+        api:
+          resource: events
+          filters:
+            - event_id
+            - venue_id
+            - event_date_from
+            - event_date_to
+            - updated_since
+          sorts:
+            - event_date
+            - event_id
+          defaultSort:
+            - event_date
+            - event_id
+          defaultPageSize: 100
+          maxPageSize: 500
+          maxResponseBytes: 5000000
 
   sla:
 

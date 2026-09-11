@@ -1,4 +1,4 @@
-import type { SubscriptionStatus } from "../config/constants.js";
+import type { MinorUpgradeBehavior, SubscriptionStatus } from "../config/constants.js";
 import type { VersionPolicy } from "./version-policy.js";
 
 export interface Subscription {
@@ -8,6 +8,8 @@ export interface Subscription {
   dataProductId: string;
   status: SubscriptionStatus;
   versionPolicy: VersionPolicy;
+  minorUpgradeBehavior: MinorUpgradeBehavior;
+  lastResolvedVersion: string | null;
   requestedAt: Date;
   activatedAt: Date | null;
   pausedAt: Date | null;

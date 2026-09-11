@@ -7,7 +7,11 @@ export interface RequestContext {
   userId: string;
   organizationId: string;
   activeTenantId: string;
+  // Primary role — kept for backward compatibility with existing
+  // role-equality checks. Always equal to roles[0].
   role: Role;
+  roles: Role[];
+  authenticationMethod: "oidc" | "dev";
 }
 
 declare module "fastify" {

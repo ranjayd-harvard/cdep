@@ -1,16 +1,26 @@
 import { DependencyError } from "../../common/errors/dependency-error.js";
 import { env } from "../../config/env.js";
+import { mintServiceToken } from "../../security/service-identity.js";
 
 // Shared fetch helper for both SubscriptionHttpClient and
 // EntitlementHttpClient — both talk to subscription-service's
-// /internal/v1/* API with the same internal-API-key + actor-header
-// convention every other service in this platform uses.
+// /internal/v1/* API. The internal-API-key env var now signs a short-lived
+// service-identity token (spec §14) rather than being sent as a raw,
+// indefinitely-reusable secret.
 export async function subscriptionServiceFetch<T>(
   path: string,
   init: { method?: string; body?: unknown } = {},
 ): Promise<{ status: number; json: T | undefined }> {
+  const serviceToken = await mintServiceToken(env.SUBSCRIPTION_SERVICE_INTERNAL_API_KEY, {
+    sub: "data-product-api-service",
+    aud: "subscription-service",
+    role: "DATA_PRODUCT_API_READER",
+  });
   const headers: Record<string, string> = {
     Accept: "application/json",
+    "x-service-token": serviceToken,
+    // Legacy fields, additive only — see subscription-service's
+    // internal-auth.middleware.ts migration note.
     "x-internal-api-key": env.SUBSCRIPTION_SERVICE_INTERNAL_API_KEY,
     "x-actor-type": "SERVICE",
     "x-actor-id": "data-product-api-service",

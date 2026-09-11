@@ -30,8 +30,10 @@ from publication.common.time import utcnow
 from publication.config.settings import Settings
 from publication.contracts.loader import load_publication_contract
 from publication.contracts.validator import validate_gold_ready_against_contract
+from publication.entitlement.client import EntitlementClient
 from publication.exchange.client import ExchangeServiceClient
 from publication.exporters.csv_exporter import CsvExporter
+from publication.exporters.manifest import write_manifest
 from publication.exporters.parquet_exporter import ParquetExporter
 from publication.lakehouse.reader import read_gold_for_publication
 from publication.metadata.repository import PublicationRepository
@@ -61,11 +63,13 @@ class PublicationService:
         repository: PublicationRepository,
         exchange_client: ExchangeServiceClient,
         notifier: PublicationReadyNotifier | None = None,
+        entitlement_client: EntitlementClient | None = None,
     ) -> None:
         self._settings = settings
         self._repo = repository
         self._exchange = exchange_client
         self._notifier = notifier or LoggingPublicationReadyNotifier()
+        self._entitlement = entitlement_client or EntitlementClient(settings)
 
     def publish(
         self,
@@ -75,6 +79,22 @@ class PublicationService:
         republish: bool = False,
         external_idempotency_key: str | None = None,
     ) -> PublicationOutcome:
+        # Phase 11 (spec §9/§21): re-validated fresh on every call, exactly
+        # like scheduling-service's own entitlement check before dispatch --
+        # this service no longer trusts that whoever holds the internal API
+        # key already checked entitlement upstream. Fails closed: an
+        # unconfigured or unreachable subscription-service is a DENY, not a
+        # silent ALLOW (spec §37).
+        if not self._entitlement.is_entitled(
+            organization_id=gold_ready.organization_id,
+            tenant_id=gold_ready.tenant_id,
+            data_product_id=gold_ready.data_product_id,
+        ):
+            raise PublicationError(
+                f"Tenant '{gold_ready.tenant_id}' is not entitled to data product '{gold_ready.data_product_id}'.",
+                error_code="ENTITLEMENT_DENIED",
+            )
+
         # Phase 7 cross-service idempotency check -- checked first and
         # independent of `republish`/the internal gold_ready-based
         # idempotency_key below. A Scheduler retry after a lost response
@@ -257,8 +277,15 @@ class PublicationService:
         artifact_dir.mkdir(parents=True, exist_ok=True)
         exporter = _EXPORTERS[fmt]
         compression = {"PARQUET": contract.publication.compression.parquet, "CSV": contract.publication.compression.csv}[fmt]
-        artifact = exporter.export(projected, destination=artifact_dir / filename, artifact_id=new_artifact_id(), compression=compression)
-        repo.record_event(publication_id, "ARTIFACT_CREATED", {"filename": artifact.filename, "size_bytes": artifact.size_bytes})
+        artifact = exporter.export(
+            projected,
+            destination=artifact_dir / filename,
+            artifact_id=new_artifact_id(),
+            compression=compression,
+            product_version=gold_ready.product_version,
+        )
+        write_manifest(artifact, artifact_dir)
+        repo.record_event(publication_id, "ARTIFACT_CREATED", {"filename": artifact.filename, "size_bytes": artifact.size_bytes, "product_version": artifact.product_version})
 
         repo.update_status(publication_id, PublicationStatus.CALCULATING_CHECKSUM.value)
         readability = evaluate_artifact_readable(artifact)

@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { requireInternalAuth } from "../auth/auth.middleware.js";
 import { getRequestContext } from "../auth/authorization.js";
+import { recordSecurityAuditEvent } from "../audit/audit.repository.js";
+import { AppError } from "../common/errors/app-error.js";
 import { registerContract } from "./registration.service.js";
 
 export async function registrationRoutes(app: FastifyInstance): Promise<void> {
@@ -37,12 +39,36 @@ export async function registrationRoutes(app: FastifyInstance): Promise<void> {
       };
       const actor = getRequestContext(request);
 
-      const result = await registerContract({
-        contract: body.contract,
-        contractFormat: body.contractFormat,
-        source: body.source,
-        actor,
-      });
+      let result;
+      try {
+        result = await registerContract({
+          contract: body.contract,
+          contractFormat: body.contractFormat,
+          source: body.source,
+          actor,
+        });
+      } catch (err) {
+        // Phase 11 (spec §20/§29): a rejected registration — including the
+        // governance rules in registration.validator.ts (missing piiType/
+        // maskingPolicy/retentionPolicyRef on a RESTRICTED field) — is a
+        // security/governance-relevant event worth its own audit trail,
+        // distinct from registration_events (which only records
+        // successful registrations).
+        if (err instanceof AppError && err.code === "CONTRACT_INVALID") {
+          await recordSecurityAuditEvent({
+            eventType: "CONTRACT_POLICY_VIOLATION",
+            actorType: actor.actorType,
+            actorId: actor.actorId,
+            resourceType: "contract",
+            resourceId: (body.contract as { metadata?: { id?: string } } | undefined)?.metadata?.id ?? null,
+            decision: "DENY",
+            reasonCode: "CONTRACT_INVALID",
+            correlationId: request.correlationId,
+            metadata: { message: err.message },
+          });
+        }
+        throw err;
+      }
 
       request.log.info(
         {

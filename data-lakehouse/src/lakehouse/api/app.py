@@ -25,6 +25,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     app = FastAPI(title="lakehouse-internal-api", lifespan=lifespan)
     app.include_router(router)
+
+    # Phase 11 (spec §36) — backs the container HEALTHCHECK in
+    # docker-compose.yml, same convention as data-publication-service and
+    # serving-projection-service's own /health/live.
+    @app.get("/health/live")
+    def health_live() -> dict:
+        return {"status": "ok"}
+
     return app
 
 

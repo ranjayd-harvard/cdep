@@ -45,7 +45,10 @@ export interface CatalogProductDetailDTO {
   versionHistory: CatalogVersionSummaryDTO[];
 }
 
-async function catalogFetch<T>(path: string, options: { internal?: boolean } = {}): Promise<T> {
+async function catalogFetch<T>(
+  path: string,
+  options: { internal?: boolean; method?: "GET" | "POST"; body?: unknown } = {},
+): Promise<T> {
   if (!catalogServiceEnabled) {
     throw new CatalogUnavailableError("CATALOG_SERVICE_URL is not configured.");
   }
@@ -57,13 +60,21 @@ async function catalogFetch<T>(path: string, options: { internal?: boolean } = {
     headers["x-actor-id"] = "subscription-service";
     headers["x-actor-role"] = "CATALOG_READER";
   }
+  if (options.body !== undefined) {
+    headers["Content-Type"] = "application/json";
+  }
 
   let response: Response;
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), env.CATALOG_SERVICE_TIMEOUT_SECONDS * 1000);
     try {
-      response = await fetch(`${env.CATALOG_SERVICE_URL}${path}`, { headers, signal: controller.signal });
+      response = await fetch(`${env.CATALOG_SERVICE_URL}${path}`, {
+        method: options.method ?? "GET",
+        headers,
+        body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+        signal: controller.signal,
+      });
     } finally {
       clearTimeout(timeout);
     }
@@ -114,48 +125,54 @@ export function listCatalogVersions(dataProductId: string): Promise<{ items: Cat
   );
 }
 
-function majorOf(version: string): string | null {
-  const match = /^(\d+)\./.exec(version);
-  return match ? (match[1] as string) : null;
-}
-
 export interface ResolvedVersion {
   version: string;
   lifecycleStatus: string;
+  fellBackToDeprecated?: boolean;
 }
 
-// Spec §20/§21 — EXACT looks up the specific version; COMPATIBLE_MAJOR and
-// LATEST_ACTIVE pick the highest ACTIVE version, COMPATIBLE_MAJOR never
-// crossing the requested major. Never binds permanently to a version for a
-// floating policy — callers re-resolve at activation/resume time.
-export async function resolveVersionPolicy(dataProductId: string, policy: VersionPolicy): Promise<ResolvedVersion> {
-  if (policy.type === "EXACT") {
-    const value = policy.value;
-    if (!value) {
-      throw new AppError("VERSION_POLICY_NOT_RESOLVABLE", "EXACT version policy requires a value.");
-    }
-    const version = await getCatalogVersion(dataProductId, value);
-    return { version: version.version, lifecycleStatus: version.lifecycleStatus };
-  }
+export type ResolutionIntent = "SUBSCRIBE" | "DELIVER";
 
-  const { items } = await listCatalogVersions(dataProductId);
-  const activeVersions = items.filter((v) => v.lifecycleStatus === "ACTIVE");
-
-  const candidates =
-    policy.type === "COMPATIBLE_MAJOR" ? activeVersions.filter((v) => majorOf(v.version) === policy.value) : activeVersions;
-
-  if (candidates.length === 0) {
-    throw new AppError(
-      "VERSION_POLICY_NOT_RESOLVABLE",
-      policy.type === "COMPATIBLE_MAJOR"
-        ? `No ACTIVE version of '${dataProductId}' matches major version ${policy.value}.x.`
-        : `'${dataProductId}' has no ACTIVE version.`,
+// Phase 10 §27/§30: a thin wrapper on Catalog's centralized resolver —
+// Catalog is now the sole authority for version-ranking logic across all
+// five policy types (EXACT/COMPATIBLE_PATCH/COMPATIBLE_MINOR/PINNED_MAJOR/
+// LATEST_ACTIVE). This replaces the local majorOf/filter/sort algorithm
+// that used to live here and only ever knew 3 policy types — it filtered
+// to ACTIVE only, which meant a PINNED_MAJOR/COMPATIBLE_MINOR subscriber
+// would get VERSION_POLICY_NOT_RESOLVABLE the instant their major version's
+// canonical ACTIVE version rotated to DEPRECATED, even though a perfectly
+// good DEPRECATED-but-serving version within their pinned range was still
+// available. Catalog's resolver fixes this via the SUBSCRIBE/DELIVER
+// intent split (spec §29).
+export async function resolveVersionPolicy(
+  dataProductId: string,
+  policy: VersionPolicy,
+  intent: ResolutionIntent,
+  tenant?: { organizationId: string; tenantId: string },
+  preferredVersion?: string,
+): Promise<ResolvedVersion> {
+  try {
+    const result = await catalogFetch<{ resolved_version: string; lifecycle_status: string; fell_back_to_deprecated: boolean }>(
+      `/internal/v1/data-products/${encodeURIComponent(dataProductId)}/resolve-version`,
+      {
+        internal: true,
+        method: "POST",
+        body: {
+          policy,
+          intent,
+          organizationId: tenant?.organizationId,
+          tenantId: tenant?.tenantId,
+          preferredVersion,
+        },
+      },
     );
+    return { version: result.resolved_version, lifecycleStatus: result.lifecycle_status, fellBackToDeprecated: result.fell_back_to_deprecated };
+  } catch (err) {
+    if (err instanceof AppError) {
+      throw new AppError("VERSION_POLICY_NOT_RESOLVABLE", err.message);
+    }
+    throw err;
   }
-
-  candidates.sort((a, b) => (a.version > b.version ? -1 : a.version < b.version ? 1 : 0));
-  const best = candidates[0] as CatalogVersionSummaryDTO;
-  return { version: best.version, lifecycleStatus: best.lifecycleStatus };
 }
 
 // Spec §24/§29 — Catalog remains authoritative for which delivery

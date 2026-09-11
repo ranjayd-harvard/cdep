@@ -5,7 +5,9 @@ import type { CompatibilityLevel } from "../config/constants.js";
 import { contractDocumentSchema, type ContractDocument } from "./contract-schema.js";
 import { validateContractStructure } from "./registration.validator.js";
 import { computeContractHash } from "./contract-hash.js";
-import { assessCompatibility, type CompatibilityField } from "./compatibility.js";
+import { assessCompatibility, type CompatibilityChange } from "../modules/compatibility/compatibility.service.js";
+import { recordCompatibilityResult } from "../modules/compatibility/compatibility-result.repository.js";
+import { buildPreviousCompatibilitySide, toDeliverySnapshots } from "../modules/compatibility/compatibility-context.js";
 import { parseSemVer, isAnyBump, isMajorBump, isMinorOrHigherBump } from "../common/utils/semver.js";
 import { findDomain } from "../modules/domains/domain.repository.js";
 import { findOwner } from "../modules/owners/owner.repository.js";
@@ -37,7 +39,7 @@ export interface RegisterContractResult {
   contractId: string;
   contractHash: string;
   compatibility: CompatibilityLevel;
-  compatibilityChanges: string[];
+  compatibilityChanges: CompatibilityChange[];
   registration: "SUCCESS" | "DUPLICATE";
 }
 
@@ -109,20 +111,27 @@ export async function registerContract(input: RegisterContractInput): Promise<Re
   }
 
   const previousVersionRow = existingProduct ? await findLatestVersion(dataProductId) : null;
-  let previousFields: CompatibilityField[] | null = null;
-  if (previousVersionRow) {
-    const rows = await listSchemaFields(previousVersionRow.data_product_version_id);
-    previousFields = rows.map((r) => ({
-      fieldName: r.field_name,
-      dataType: r.data_type,
-      nullable: r.nullable,
-      grainKey: r.grain_key,
-      businessKey: r.business_key,
-      customerVisible: r.customer_visible,
-    }));
-  }
+  const previousSide = previousVersionRow ? await buildPreviousCompatibilitySide(previousVersionRow) : null;
 
-  const compatibility = assessCompatibility(previousFields, doc.spec.schema);
+  const compatibility = assessCompatibility({
+    previous: previousSide,
+    next: {
+      fields: doc.spec.schema,
+      quality: {
+        minimumCompletenessPercent: doc.spec.quality.minimumCompletenessPercent,
+        maximumInvalidPercent: doc.spec.quality.maximumInvalidPercent,
+        grainUniqueRequired: doc.spec.quality.grainUniqueRequired,
+        rules: doc.spec.quality.rules,
+      },
+      sla: {
+        freshnessMinutes: doc.spec.sla.freshnessMinutes,
+        availabilityTargetPercent: doc.spec.sla.availabilityTargetPercent,
+        deliveryDeadlineExpression: doc.spec.sla.deliveryDeadlineExpression,
+        maximumPublicationLatencyMinutes: doc.spec.sla.maximumPublicationLatencyMinutes,
+      },
+      delivery: toDeliverySnapshots(doc.spec.delivery.methods.map((m) => ({ type: m.type, enabled: m.enabled, configuration: m.api ? { filters: m.api.filters, sorts: m.api.sorts } : {} }))),
+    },
+  });
 
   if (previousVersionRow) {
     const prevSemVer = parseSemVer(previousVersionRow.version)!;
@@ -137,13 +146,15 @@ export async function registerContract(input: RegisterContractInput): Promise<Re
     if (compatibility.level === "BREAKING" && !isMajorBump(prevSemVer, newSemVer)) {
       throw new AppError(
         "BREAKING_CHANGE_REQUIRES_MAJOR_VERSION",
-        `Breaking change detected (${compatibility.changes.join("; ")}) but '${doc.metadata.version}' is not a major version bump over '${previousVersionRow.version}'. Use ${prevSemVer.major + 1}.0.0 or higher.`,
+        `Breaking change detected (${compatibility.changes.map((c) => c.detail).join("; ")}) but '${doc.metadata.version}' is not a major version bump over '${previousVersionRow.version}'. Use ${prevSemVer.major + 1}.0.0 or higher.`,
       );
     }
 
+    // Phase 10 §5: the version bump is validated against the *computed*
+    // compatibility, never inferred from the version string alone.
     if (compatibility.level === "NON_BREAKING" && !isMinorOrHigherBump(prevSemVer, newSemVer)) {
       throw new AppError(
-        "CONTRACT_INVALID",
+        "VERSION_BUMP_MISMATCH",
         `Additive/non-breaking change detected but '${doc.metadata.version}' is only a patch bump over '${previousVersionRow.version}'. Use at least a minor version bump (${prevSemVer.major}.${prevSemVer.minor + 1}.0).`,
       );
     }
@@ -185,6 +196,15 @@ export async function registerContract(input: RegisterContractInput): Promise<Re
       description: doc.spec.description,
       grainDefinition: doc.spec.grain.description,
       breakingChange: compatibility.level === "BREAKING",
+      compatibilityType: compatibility.level,
+      predecessorVersion: previousVersionRow?.version ?? null,
+      migrationRequired: compatibility.level === "BREAKING",
+      dataClassification: doc.spec.governance.dataClassification ?? null,
+      retentionPolicyRef: doc.spec.governance.retentionPolicyRef ?? null,
+      // Derived, not author-declared, so it can never drift from the
+      // fields actually marked pii: true (spec §17/§19).
+      containsPii: doc.spec.schema.some((f) => f.pii),
+      complianceTags: doc.spec.governance.complianceTags,
     });
     await recordEvent(client, {
       dataProductId,
@@ -266,6 +286,30 @@ export async function registerContract(input: RegisterContractInput): Promise<Re
         compatibility: compatibility.level,
         changes: compatibility.changes,
         previousVersion: previousVersionRow?.version ?? null,
+      },
+    });
+
+    // Phase 10 §14: every compatibility evaluation — registration-time
+    // (here) and explicit dry-run (§23, evaluate-compatibility.service.ts)
+    // — persists a structured, explainable diff row and its own event,
+    // independent of the pre-existing COMPATIBILITY_CHECK_PASSED event.
+    await recordCompatibilityResult(client, {
+      dataProductId,
+      fromVersion: previousVersionRow?.version ?? null,
+      toVersion: doc.metadata.version,
+      level: compatibility.level,
+      changes: compatibility.changes,
+    });
+    await recordEvent(client, {
+      dataProductId,
+      version: doc.metadata.version,
+      eventType: "COMPATIBILITY_EVALUATED",
+      actor: input.actor,
+      eventData: {
+        compatibility: compatibility.level,
+        changes: compatibility.changes,
+        fromVersion: previousVersionRow?.version ?? null,
+        toVersion: doc.metadata.version,
       },
     });
 

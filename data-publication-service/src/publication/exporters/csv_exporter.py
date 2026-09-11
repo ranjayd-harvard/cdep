@@ -41,6 +41,7 @@ class CsvExporter:
         destination: Path,
         artifact_id: str,
         compression: str | None = "gzip",
+        product_version: str,
     ) -> ArtifactResult:
         uncompressed_path = destination.with_suffix("") if destination.suffix == ".gz" else destination
 
@@ -81,6 +82,7 @@ class CsvExporter:
             checksum_algorithm="SHA-256",
             checksum=checksum,
             record_count=table.num_rows,
+            product_version=product_version,
         )
 
 

@@ -8,6 +8,13 @@ export const ROLES = [
   "CATALOG_READER",
   "SCHEDULER_READER",
   "PLATFORM_ADMIN",
+  // Phase 11 (spec §9) — canonical platform roles, added not renamed.
+  "PRODUCT_CONSUMER",
+  "PRODUCT_OWNER",
+  "DATA_STEWARD",
+  "PLATFORM_OPERATOR",
+  "SECURITY_ADMIN",
+  "SERVICE",
 ] as const;
 export type Role = (typeof ROLES)[number];
 

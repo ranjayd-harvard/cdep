@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "seed:users": "tsx --env-file=.env.local scripts/seed-users.ts",
     "seed:catalog": "tsx --env-file=.env.local scripts/seed-catalog.ts",
-    "create-superuser": "tsx --env-file=.env.local scripts/create-superuser.ts"
+    "create-superuser": "tsx --env-file=.env.local scripts/create-superuser.ts",
+    "security:release-gate": "tsx scripts/security/release-gate.ts"
   },
   "dependencies": {
     "@xyflow/react": "^12.11.6",

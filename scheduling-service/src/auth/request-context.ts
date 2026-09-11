@@ -8,6 +8,8 @@ export interface TenantContext {
   organizationId: string;
   activeTenantId: string;
   role: Role;
+  roles: Role[];
+  authenticationMethod: "oidc" | "dev";
 }
 
 // Internal/service-to-service identity (/internal/v1/*) — established from

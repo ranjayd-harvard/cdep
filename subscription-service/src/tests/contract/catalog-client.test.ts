@@ -38,23 +38,23 @@ describe("catalog client contract (live data-product-catalog-service)", () => {
     await expect(getCatalogProduct("does-not-exist-product")).rejects.toMatchObject({ code: "PRODUCT_NOT_FOUND" });
   });
 
-  it("resolves EXACT to the requested version even if not ACTIVE", async () => {
-    const resolved = await resolveVersionPolicy(KNOWN_PRODUCT, { type: "EXACT", value: "1.0.0" });
+  it("resolves EXACT to the requested version even if not ACTIVE (DELIVER intent)", async () => {
+    const resolved = await resolveVersionPolicy(KNOWN_PRODUCT, { type: "EXACT", value: "1.0.0" }, "DELIVER");
     expect(resolved.version).toBe("1.0.0");
   });
 
-  it("resolves COMPATIBLE_MAJOR to the highest ACTIVE version within that major, never crossing majors", async () => {
-    const resolved = await resolveVersionPolicy(KNOWN_PRODUCT, { type: "COMPATIBLE_MAJOR", value: "1" });
+  it("resolves COMPATIBLE_MINOR to the highest ACTIVE version within that major, never crossing majors", async () => {
+    const resolved = await resolveVersionPolicy(KNOWN_PRODUCT, { type: "COMPATIBLE_MINOR", value: "1" }, "SUBSCRIBE");
     expect(resolved.version).toBe("1.1.0"); // not 2.0.0 (different major, DRAFT anyway)
   });
 
   it("resolves LATEST_ACTIVE to the highest ACTIVE version across all majors", async () => {
-    const resolved = await resolveVersionPolicy(KNOWN_PRODUCT, { type: "LATEST_ACTIVE", value: null });
+    const resolved = await resolveVersionPolicy(KNOWN_PRODUCT, { type: "LATEST_ACTIVE", value: null }, "SUBSCRIBE");
     expect(resolved.version).toBe("1.1.0"); // 2.0.0 is DRAFT, not eligible
   });
 
   it("fails VERSION_POLICY_NOT_RESOLVABLE for a major with no ACTIVE version", async () => {
-    await expect(resolveVersionPolicy(KNOWN_PRODUCT, { type: "COMPATIBLE_MAJOR", value: "2" })).rejects.toMatchObject({
+    await expect(resolveVersionPolicy(KNOWN_PRODUCT, { type: "COMPATIBLE_MINOR", value: "2" }, "SUBSCRIBE")).rejects.toMatchObject({
       code: "VERSION_POLICY_NOT_RESOLVABLE",
     });
   });

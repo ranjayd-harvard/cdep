@@ -4,11 +4,13 @@ import type {
   DatasetService,
   EntitlementService,
   LakehouseAdminService,
+  ObservabilityAdminService,
   OrganizationInvitationService,
   OrganizationMembershipService,
   OrganizationService,
   PipelineJobAdminService,
   PlatformSettingsService,
+  ProductVersioningAdminService,
   PublicationAdminService,
   TenantService,
 } from "@/services/interfaces";
@@ -37,6 +39,8 @@ import {
 import { LakehouseAdminApiService, UnavailableLakehouseAdminService } from "@/services/lakehouse-admin";
 import { PublicationAdminApiService, UnavailablePublicationAdminService } from "@/services/publication-admin";
 import { PipelineJobAdminApiService, UnavailablePipelineJobAdminService } from "@/services/pipeline-job-admin";
+import { ObservabilityAdminApiService, UnavailableObservabilityAdminService } from "@/services/observability-admin";
+import { ProductVersioningAdminApiService, UnavailableProductVersioningAdminService } from "@/services/product-versioning-admin";
 
 export interface ServiceRegistry extends ClientServiceRegistry {
   organizations: OrganizationService;
@@ -51,6 +55,8 @@ export interface ServiceRegistry extends ClientServiceRegistry {
   lakehouseAdmin: LakehouseAdminService;
   publicationAdmin: PublicationAdminService;
   pipelineJobAdmin: PipelineJobAdminService;
+  observabilityAdmin: ObservabilityAdminService;
+  productVersioningAdmin: ProductVersioningAdminService;
 }
 
 /**
@@ -120,6 +126,12 @@ function createServices(): ServiceRegistry {
     pipelineJobAdmin: env.exchangeServiceEnabled
       ? new PipelineJobAdminApiService()
       : new UnavailablePipelineJobAdminService(),
+    observabilityAdmin: env.observabilityServiceEnabled
+      ? new ObservabilityAdminApiService()
+      : new UnavailableObservabilityAdminService(),
+    productVersioningAdmin: env.catalogServiceEnabled
+      ? new ProductVersioningAdminApiService()
+      : new UnavailableProductVersioningAdminService(),
   };
 }
 
@@ -134,11 +146,13 @@ export type {
   ExchangeService,
   LakehouseAdminService,
   NotificationService,
+  ObservabilityAdminService,
   OrganizationInvitationService,
   OrganizationMembershipService,
   OrganizationService,
   PipelineJobAdminService,
   PlatformSettingsService,
+  ProductVersioningAdminService,
   PublicationAdminService,
   TenantService,
   UploadService,

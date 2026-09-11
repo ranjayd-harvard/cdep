@@ -5,6 +5,7 @@ import { pool } from "../../database/pool.js";
 import { withTransaction } from "../../database/transaction.js";
 import { validateDeliveryPreference, type DeliveryPreference, type DeliveryPreferenceInput } from "../../domain/delivery-preference.js";
 import type { Subscription } from "../../domain/subscription.js";
+import type { MinorUpgradeBehavior } from "../../config/constants.js";
 import { assertTransition } from "../../domain/transition-rules.js";
 import { formatVersionPolicy, parseVersionPolicy, type VersionPolicy } from "../../domain/version-policy.js";
 import {
@@ -26,6 +27,7 @@ import {
   listSubscriptionsForTenant,
   updateSubscriptionStatus,
   updateSubscriptionVersionPolicy,
+  updateLastResolvedVersion,
   type DeliveryCandidateFilter,
   type DeliveryCandidatePage,
   listDeliveryCandidates as listDeliveryCandidatesRepo,
@@ -68,6 +70,7 @@ export interface CreateSubscriptionInput {
   tenantId: string;
   dataProductId: string;
   versionPolicy: string | VersionPolicy;
+  minorUpgradeBehavior?: MinorUpgradeBehavior;
   delivery: DeliveryPreferenceInput;
 }
 
@@ -76,7 +79,7 @@ export async function createSubscription(input: CreateSubscriptionInput, actor: 
   await assertEntitlementAllows(pool, input.organizationId, input.tenantId, input.dataProductId);
 
   const policy = parseVersionPolicy(input.versionPolicy);
-  const resolved = await resolveVersionPolicy(input.dataProductId, policy);
+  const resolved = await resolveVersionPolicy(input.dataProductId, policy, "SUBSCRIBE", { organizationId: input.organizationId, tenantId: input.tenantId });
 
   validateDeliveryPreference(input.delivery);
   await validateDeliveryCapability(input.dataProductId, resolved.version, input.delivery.method, input.delivery.format ?? null);
@@ -90,6 +93,7 @@ export async function createSubscription(input: CreateSubscriptionInput, actor: 
       status: "ACTIVE",
       versionPolicyType: policy.type,
       versionPolicyValue: policy.value,
+      minorUpgradeBehavior: input.minorUpgradeBehavior,
       activatedAt: new Date(),
       actorId: actor.actorId,
     });
@@ -145,7 +149,10 @@ export function listSubscriptions(organizationId: string, tenantId: string): Pro
 async function revalidateEligibility(subscription: Subscription): Promise<ResolvedVersion> {
   await assertProductActive(subscription.dataProductId);
   await assertEntitlementAllows(pool, subscription.organizationId, subscription.tenantId, subscription.dataProductId);
-  const resolved = await resolveVersionPolicy(subscription.dataProductId, subscription.versionPolicy);
+  const resolved = await resolveVersionPolicy(subscription.dataProductId, subscription.versionPolicy, "SUBSCRIBE", {
+    organizationId: subscription.organizationId,
+    tenantId: subscription.tenantId,
+  });
 
   const delivery = await findDeliveryPreferenceBySubscription(pool, subscription.subscriptionId);
   if (!delivery) {
@@ -274,7 +281,10 @@ export async function updateSubscriptionDeliveryPreference(input: UpdateDelivery
   }
 
   validateDeliveryPreference(input.delivery);
-  const resolved = await resolveVersionPolicy(subscription.dataProductId, subscription.versionPolicy);
+  const resolved = await resolveVersionPolicy(subscription.dataProductId, subscription.versionPolicy, "DELIVER", {
+    organizationId: subscription.organizationId,
+    tenantId: subscription.tenantId,
+  });
   await validateDeliveryCapability(subscription.dataProductId, resolved.version, input.delivery.method, input.delivery.format ?? null);
 
   const current = await findDeliveryPreferenceBySubscription(pool, input.subscriptionId);
@@ -321,6 +331,7 @@ export interface UpdateVersionPolicyCommandInput {
   tenantId: string;
   subscriptionId: string;
   versionPolicy: string | VersionPolicy;
+  minorUpgradeBehavior?: MinorUpgradeBehavior;
 }
 
 export async function updateSubscriptionVersionPolicyCommand(input: UpdateVersionPolicyCommandInput, actor: AuditActor): Promise<Subscription> {
@@ -332,7 +343,13 @@ export async function updateSubscriptionVersionPolicyCommand(input: UpdateVersio
   const policy = parseVersionPolicy(input.versionPolicy);
   // Never silently crosses majors (spec §21) — resolving here fails fast
   // with VERSION_POLICY_NOT_RESOLVABLE if the new policy has no eligible version.
-  await resolveVersionPolicy(subscription.dataProductId, policy);
+  // SUBSCRIBE intent: a policy change is a new eligibility decision, same
+  // as creating a subscription (spec §29) — floating policies only ever
+  // see ACTIVE candidates here.
+  await resolveVersionPolicy(subscription.dataProductId, policy, "SUBSCRIBE", {
+    organizationId: input.organizationId,
+    tenantId: input.tenantId,
+  });
 
   return withTransaction(async (client) => {
     const updated = await updateSubscriptionVersionPolicy(client, {
@@ -340,6 +357,7 @@ export async function updateSubscriptionVersionPolicyCommand(input: UpdateVersio
       expectedVersion: subscription.version,
       versionPolicyType: policy.type,
       versionPolicyValue: policy.value,
+      minorUpgradeBehavior: input.minorUpgradeBehavior,
       actorId: actor.actorId,
     });
 
@@ -373,8 +391,26 @@ async function buildDeliveryContextDTO(subscription: Subscription): Promise<Deli
 
   let resolvedProductVersion: DeliveryContextDTO["resolvedProductVersion"] = null;
   try {
-    const resolved = await resolveVersionPolicy(subscription.dataProductId, subscription.versionPolicy);
+    // Phase 10 §28/§32: PIN_CURRENT/MANUAL_APPROVAL honor the subscription's
+    // own last-resolved version as a preferred-candidate hint — the
+    // resolver stays stateless, this is the caller-side half of that
+    // design. AUTO_UPGRADE_MINOR (the default) passes no hint, so the
+    // resolver always picks the current highest eligible candidate.
+    const preferredVersion =
+      subscription.minorUpgradeBehavior !== "AUTO_UPGRADE_MINOR" && subscription.lastResolvedVersion
+        ? subscription.lastResolvedVersion
+        : undefined;
+    const resolved = await resolveVersionPolicy(
+      subscription.dataProductId,
+      subscription.versionPolicy,
+      "DELIVER",
+      { organizationId: subscription.organizationId, tenantId: subscription.tenantId },
+      preferredVersion,
+    );
     resolvedProductVersion = { version: resolved.version, lifecycleStatus: resolved.lifecycleStatus };
+    if (resolved.version !== subscription.lastResolvedVersion) {
+      await updateLastResolvedVersion(pool, subscription.subscriptionId, resolved.version);
+    }
   } catch {
     resolvedProductVersion = null;
   }

@@ -23,16 +23,24 @@ async function requireVisibleProduct(dataProductId: string) {
   return product;
 }
 
+// Phase 10 §36: DRAFT is never listed here, and BETA is deliberately
+// blind on this public, unauthenticated route — it has no tenant context
+// to check an opt-in against (spec §11/§18), and Catalog doesn't own
+// tenant authentication. BETA-version discovery belongs to subscription-
+// service's tenant-aware customer routes instead; adding tenant auth here
+// would duplicate that, for no benefit.
+const CUSTOMER_VISIBLE_STATUSES = new Set(["ACTIVE", "DEPRECATED", "RETIRED"]);
+
 export async function listCustomerVersions(dataProductId: string) {
   await requireVisibleProduct(dataProductId);
   const versions = await listVersions(dataProductId);
-  return versions.map(toCustomerVersionSummary);
+  return versions.filter((v) => CUSTOMER_VISIBLE_STATUSES.has(v.lifecycle_status)).map(toCustomerVersionSummary);
 }
 
 export async function getCustomerVersionDetail(dataProductId: string, version: string) {
   await requireVisibleProduct(dataProductId);
   const versionRow = await findVersion(dataProductId, version);
-  if (!versionRow) {
+  if (!versionRow || !CUSTOMER_VISIBLE_STATUSES.has(versionRow.lifecycle_status)) {
     throw new AppError("VERSION_NOT_FOUND", `Version '${version}' of '${dataProductId}' was not found.`);
   }
   const [fields, delivery, sla, quality] = await Promise.all([
@@ -49,7 +57,7 @@ export interface ApiContractDTO {
   version: string;
   lifecycleStatus: string;
   resource: string;
-  publishedFields: Array<{ name: string; type: string; nullable: boolean }>;
+  publishedFields: Array<{ name: string; type: string; nullable: boolean; maskingPolicy: string | null }>;
   filters: string[];
   sorts: string[];
   defaultSort: string[];
@@ -112,9 +120,12 @@ export async function getApiContract(dataProductId: string, version: string): Pr
     version: versionRow.version,
     lifecycleStatus: versionRow.lifecycle_status,
     resource: config.resource,
+    // Phase 11 (spec §21): a DENY field is excluded even if customer_visible
+    // was left true, same "DENY always wins" rule data-publication-service's
+    // loader applies for FILE delivery, so both delivery methods agree.
     publishedFields: fields
-      .filter((f) => f.customer_visible)
-      .map((f) => ({ name: f.field_name, type: f.data_type, nullable: f.nullable })),
+      .filter((f) => f.customer_visible && f.masking_policy !== "DENY")
+      .map((f) => ({ name: f.field_name, type: f.data_type, nullable: f.nullable, maskingPolicy: f.masking_policy })),
     filters: config.filters ?? [],
     sorts: config.sorts ?? [],
     defaultSort: config.defaultSort ?? [],

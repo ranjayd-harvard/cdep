@@ -62,4 +62,39 @@ export function validateContractStructure(doc: ContractDocument): void {
   if (doc.spec.quality.grainUniqueRequired && doc.spec.grain.keys.length === 0) {
     throw new AppError("CONTRACT_INVALID", "quality.grainUniqueRequired is set but spec.grain.keys is empty.");
   }
+
+  // Phase 11 governance validation (spec §20): a RESTRICTED field must
+  // carry a deliberate governance decision, not fall through to defaults.
+  // Errors here are engineering-actionable (which field, which rule) and
+  // never expose more than the contract the caller already submitted.
+  for (const field of doc.spec.schema) {
+    if (field.classification !== "RESTRICTED") continue;
+
+    if (!field.piiType) {
+      throw new AppError(
+        "CONTRACT_INVALID",
+        `Field '${field.name}' is classification RESTRICTED and must declare piiType.`,
+      );
+    }
+    if (!field.maskingPolicy) {
+      throw new AppError(
+        "CONTRACT_INVALID",
+        `Field '${field.name}' is classification RESTRICTED and must declare maskingPolicy.`,
+      );
+    }
+    if (field.maskingPolicy === "ALLOW" && field.customerVisible) {
+      throw new AppError(
+        "CONTRACT_INVALID",
+        `Field '${field.name}' is classification RESTRICTED, customerVisible: true, and maskingPolicy: ALLOW — a RESTRICTED field must be masked/redacted/hashed/denied, or explicitly marked customerVisible: false.`,
+      );
+    }
+  }
+
+  const hasRestrictedField = doc.spec.schema.some((f) => f.classification === "RESTRICTED");
+  if (hasRestrictedField && !doc.spec.governance.retentionPolicyRef) {
+    throw new AppError(
+      "CONTRACT_INVALID",
+      "At least one schema field is classification RESTRICTED; spec.governance.retentionPolicyRef must be set.",
+    );
+  }
 }

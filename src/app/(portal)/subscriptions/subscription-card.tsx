@@ -2,6 +2,7 @@ import { Button, Card, CardContent, CardHeader, CardTitle, StatusBadge } from "@
 import type { CatalogProductSummaryDTO } from "@/lib/catalog-service/client";
 import type { EntitlementDecisionDTO, SubscriptionDTO } from "@/lib/subscription-service/client";
 import type { ExecutionDTO, ScheduleStatusDTO } from "@/lib/scheduling-service/client";
+import type { ProductStatusDTO } from "@/lib/observability-service/client";
 import { formatDateTime } from "@/lib/utils";
 import { cancelSubscription, pauseSubscription, resumeSubscription } from "./subscription-actions";
 import { SubscribeForm } from "./subscribe-form";
@@ -11,10 +12,16 @@ function formatVersionPolicy(policy: SubscriptionDTO["version_policy"]): string 
   switch (policy.type) {
     case "EXACT":
       return policy.value ?? "—";
-    case "COMPATIBLE_MAJOR":
+    case "COMPATIBLE_PATCH":
       return `${policy.value}.x`;
+    case "COMPATIBLE_MINOR":
+      return `${policy.value}.x`;
+    case "PINNED_MAJOR":
+      return `${policy.value} (pinned)`;
     case "LATEST_ACTIVE":
       return "latest";
+    default:
+      return policy.value ?? "—";
   }
 }
 
@@ -24,6 +31,7 @@ export function SubscriptionCard({
   subscription,
   canManage,
   schedule,
+  productStatus,
 }: {
   product: CatalogProductSummaryDTO;
   entitlement: EntitlementDecisionDTO | null;
@@ -33,6 +41,9 @@ export function SubscriptionCard({
   // or hasn't reconciled this subscription yet; the panel just doesn't
   // render rather than blocking the rest of the card.
   schedule: { status: ScheduleStatusDTO; executions: ExecutionDTO[] } | null;
+  // Phase 9 — null when observability-service isn't configured, or no
+  // operational data has been observed yet for this tenant/product.
+  productStatus: ProductStatusDTO | null;
 }) {
   const isEntitled = entitlement?.decision === "ALLOW";
 
@@ -40,7 +51,10 @@ export function SubscriptionCard({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-2">
         <CardTitle>{product.name}</CardTitle>
-        <StatusBadge status={entitlement?.decision ?? "DENY"} />
+        <div className="flex items-center gap-2">
+          {productStatus ? <StatusBadge status={productStatus.status} /> : null}
+          <StatusBadge status={entitlement?.decision ?? "DENY"} />
+        </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-4 text-sm">
         <p className="text-slate-600">{product.description ?? "No description."}</p>
@@ -97,6 +111,29 @@ export function SubscriptionCard({
                 </dd>
               </div>
             </dl>
+
+            {productStatus ? (
+              <div className="flex flex-col gap-2 rounded-md border border-slate-200 p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-slate-900">Operational status</span>
+                  <StatusBadge status={productStatus.sla.status} />
+                </div>
+                <dl className="grid grid-cols-2 gap-2 text-xs text-slate-600">
+                  <div>
+                    <dt className="text-slate-400">Freshness</dt>
+                    <dd className="font-medium text-slate-800">
+                      {productStatus.freshnessMinutes !== null ? `${productStatus.freshnessMinutes} min` : "—"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-400">Last delivery</dt>
+                    <dd className="font-medium text-slate-800">
+                      {productStatus.lastSuccessfulDeliveryAt ? formatDateTime(productStatus.lastSuccessfulDeliveryAt) : "—"}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            ) : null}
 
             {subscription.suspension_reason ? (
               <p className="text-xs text-amber-700">Suspended — {subscription.suspension_reason}</p>

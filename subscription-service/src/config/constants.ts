@@ -17,6 +17,16 @@ export const ROLES = [
   // calling /internal/v1/entitlements/evaluate and the Phase-8 addition
   // /internal/v1/subscriptions/resolve — same pattern as SCHEDULER_READER.
   "DATA_PRODUCT_API_READER",
+  // Phase 11 (spec §9) — canonical platform roles a Keycloak-issued
+  // customer/operator token may carry, beyond this service's pre-existing
+  // CUSTOMER_*/PLATFORM_ADMIN set. Added, not renamed, to avoid breaking
+  // the internal actor-role checks above.
+  "PRODUCT_CONSUMER",
+  "PRODUCT_OWNER",
+  "DATA_STEWARD",
+  "PLATFORM_OPERATOR",
+  "SECURITY_ADMIN",
+  "SERVICE",
 ] as const;
 export type Role = (typeof ROLES)[number];
 
@@ -35,8 +45,13 @@ export type EntitlementDecisionReason = (typeof ENTITLEMENT_DECISION_REASONS)[nu
 export const SUBSCRIPTION_STATUSES = ["PENDING", "ACTIVE", "PAUSED", "SUSPENDED", "CANCELLED"] as const;
 export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
 
-export const VERSION_POLICY_TYPES = ["EXACT", "COMPATIBLE_MAJOR", "LATEST_ACTIVE"] as const;
+// Phase 10 §28/§32: COMPATIBLE_MAJOR renamed to COMPATIBLE_MINOR (identical
+// semantics), COMPATIBLE_PATCH and PINNED_MAJOR added.
+export const VERSION_POLICY_TYPES = ["EXACT", "COMPATIBLE_PATCH", "COMPATIBLE_MINOR", "PINNED_MAJOR", "LATEST_ACTIVE"] as const;
 export type VersionPolicyType = (typeof VERSION_POLICY_TYPES)[number];
+
+export const MINOR_UPGRADE_BEHAVIORS = ["AUTO_UPGRADE_MINOR", "PIN_CURRENT", "MANUAL_APPROVAL"] as const;
+export type MinorUpgradeBehavior = (typeof MINOR_UPGRADE_BEHAVIORS)[number];
 
 export const DELIVERY_METHODS = ["FILE", "API"] as const;
 export type DeliveryMethod = (typeof DELIVERY_METHODS)[number];

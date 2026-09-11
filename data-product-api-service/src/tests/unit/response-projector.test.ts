@@ -9,12 +9,12 @@ const CONTRACT: ApiContract = {
   lifecycleStatus: "ACTIVE",
   resource: "events",
   publishedFields: [
-    { name: "event_id", type: "string", nullable: false },
-    { name: "venue_id", type: "string", nullable: false },
-    { name: "event_date", type: "date", nullable: false },
-    { name: "tickets_sold", type: "long", nullable: true },
-    { name: "gross_revenue", type: "decimal(18,2)", nullable: true },
-    { name: "revenue_per_ticket", type: "decimal(18,2)", nullable: true },
+    { name: "event_id", type: "string", nullable: false , maskingPolicy: null },
+    { name: "venue_id", type: "string", nullable: false , maskingPolicy: null },
+    { name: "event_date", type: "date", nullable: false , maskingPolicy: null },
+    { name: "tickets_sold", type: "long", nullable: true , maskingPolicy: null },
+    { name: "gross_revenue", type: "decimal(18,2)", nullable: true , maskingPolicy: null },
+    { name: "revenue_per_ticket", type: "decimal(18,2)", nullable: true , maskingPolicy: null },
   ],
   filters: [],
   sorts: [],
@@ -69,5 +69,22 @@ describe("projectRow", () => {
     // made to emit an arbitrary field name.
     const projected = projectRow(ROW, CONTRACT, ["event_id", "storage_path"]);
     expect(projected).toEqual({ event_id: "EVT1001" });
+  });
+
+  it("applies REDACT/HASH/MASK per the contract's maskingPolicy (spec §21)", () => {
+    const maskedContract: ApiContract = {
+      ...CONTRACT,
+      publishedFields: [
+        { name: "event_id", type: "string", nullable: false, maskingPolicy: "REDACT" },
+        { name: "venue_id", type: "string", nullable: false, maskingPolicy: "HASH" },
+        { name: "event_date", type: "date", nullable: false, maskingPolicy: "MASK" },
+        { name: "tickets_sold", type: "long", nullable: true, maskingPolicy: null },
+      ],
+    };
+    const projected = projectRow(ROW, maskedContract, null);
+    expect(projected.event_id).toBe("***REDACTED***");
+    expect(projected.venue_id).toMatch(/^[a-f0-9]{64}$/);
+    expect(projected.event_date).toBe("***9-01");
+    expect(projected.tickets_sold).toBe(1200);
   });
 });

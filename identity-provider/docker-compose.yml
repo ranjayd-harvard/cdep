@@ -1,0 +1,36 @@
+name: identity-provider
+
+# Local, cloud-neutral OIDC provider for Phase 11 (spec §5/§38). Every
+# backend service treats this the same way it would treat Entra ID / Okta /
+# Auth0 / Cognito in production: it never talks to a vendor SDK, only to
+# OIDC_ISSUER_URL (for the `iss` claim check) and OIDC_JWKS_URI (to fetch
+# verification keys) — see docs/security/identity.md.
+#
+# KC_HOSTNAME/KC_HOSTNAME_PORT/KC_HOSTNAME_STRICT pin the `iss` claim Keycloak
+# stamps into every token to exactly "http://localhost:8180/realms/cdep",
+# regardless of which network path (host, or host.docker.internal from a
+# sibling service's compose network) was used to reach it. That fixed value
+# is what every service's OIDC_ISSUER_URL must equal.
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin-change-me-in-dev
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: "8180"
+      KC_HOSTNAME_STRICT: "true"
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "8180:8080"
+    volumes:
+      - ./realm-export:/opt/keycloak/data/import
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && echo -e 'GET /health/ready HTTP/1.1\\r\\nhost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"status\": \"UP\"' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped

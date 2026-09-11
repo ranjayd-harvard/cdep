@@ -46,12 +46,12 @@ export interface EventPerformanceQueryResult {
 // it" from "doesn't exist" would leak which products other tenants are
 // entitled to, the same information-disclosure concern spec §8.10 calls
 // out for cross-tenant resource enumeration.
-export async function runEventPerformanceQuery(
-  deps: EventPerformanceQueryDeps,
-  securityContext: SecurityContext,
-  requestedResource: string,
-  rawQuery: Record<string, unknown>,
-): Promise<EventPerformanceQueryResult> {
+// Entitlement + active-API-subscription check shared by both the default
+// (policy-resolved) and explicit-version routes (spec §38: naming a
+// version explicitly in the URL must never bypass this — it only changes
+// *which version* gets resolved, not whether the tenant may see the
+// product at all).
+async function requireEntitledAndSubscribed(deps: EventPerformanceQueryDeps, securityContext: SecurityContext) {
   const { organizationId, activeTenantId } = securityContext;
 
   const entitlement = await deps.entitlementClient.evaluate(organizationId, activeTenantId, DATA_PRODUCT_ID);
@@ -66,6 +66,17 @@ export async function runEventPerformanceQuery(
   if (subscription.deliveryMethod !== "API") {
     throw new AppError("PRODUCT_NOT_FOUND", `Subscription to '${DATA_PRODUCT_ID}' does not have API delivery configured.`);
   }
+  return subscription;
+}
+
+export async function runEventPerformanceQuery(
+  deps: EventPerformanceQueryDeps,
+  securityContext: SecurityContext,
+  requestedResource: string,
+  rawQuery: Record<string, unknown>,
+): Promise<EventPerformanceQueryResult> {
+  const subscription = await requireEntitledAndSubscribed(deps, securityContext);
+
   if (!subscription.resolvedProductVersion) {
     throw new AppError("PRODUCT_NOT_FOUND", `'${DATA_PRODUCT_ID}' version policy did not resolve to a servable version.`);
   }
@@ -77,6 +88,48 @@ export async function runEventPerformanceQuery(
   if (!contract) {
     throw new AppError("PRODUCT_NOT_FOUND", `'${DATA_PRODUCT_ID}' has no API contract for the resolved version.`);
   }
+  return executeContractQuery(deps, securityContext, contract, requestedResource, rawQuery);
+}
+
+// Phase 10 §38: explicit-version route. Resolves the exact named version
+// via Catalog's shared resolver (EXACT/DELIVER, spec §29-30) instead of the
+// subscription's stored floating policy — but still requires the tenant to
+// actually be entitled and subscribed at all (naming a version in the URL
+// must never bypass entitlement). RETIRED/DRAFT always fail closed
+// (resolveExactVersion returns null for both, same as any other rejection
+// — the resolver already enforces this, this caller doesn't re-derive it).
+export async function runEventPerformanceQueryForExplicitVersion(
+  deps: EventPerformanceQueryDeps,
+  securityContext: SecurityContext,
+  requestedResource: string,
+  requestedVersion: string,
+  rawQuery: Record<string, unknown>,
+): Promise<EventPerformanceQueryResult> {
+  await requireEntitledAndSubscribed(deps, securityContext);
+
+  const resolved = await deps.catalogClient.resolveExactVersion(DATA_PRODUCT_ID, requestedVersion, {
+    organizationId: securityContext.organizationId,
+    tenantId: securityContext.activeTenantId,
+  });
+  if (!resolved || !SERVABLE_LIFECYCLE_STATUSES.has(resolved.lifecycleStatus)) {
+    throw new AppError("PRODUCT_NOT_FOUND", `Version '${requestedVersion}' of '${DATA_PRODUCT_ID}' is not servable.`);
+  }
+
+  const contract = await deps.catalogClient.getApiContract(DATA_PRODUCT_ID, resolved.version);
+  if (!contract) {
+    throw new AppError("PRODUCT_NOT_FOUND", `'${DATA_PRODUCT_ID}' has no API contract for version '${requestedVersion}'.`);
+  }
+  return executeContractQuery(deps, securityContext, contract, requestedResource, rawQuery);
+}
+
+async function executeContractQuery(
+  deps: EventPerformanceQueryDeps,
+  securityContext: SecurityContext,
+  contract: NonNullable<Awaited<ReturnType<CatalogClient["getApiContract"]>>>,
+  requestedResource: string,
+  rawQuery: Record<string, unknown>,
+): Promise<EventPerformanceQueryResult> {
+  const { organizationId, activeTenantId } = securityContext;
   if (contract.resource !== requestedResource) {
     throw new AppError("RESOURCE_NOT_FOUND", `Resource '${requestedResource}' does not exist on '${DATA_PRODUCT_ID}'.`);
   }

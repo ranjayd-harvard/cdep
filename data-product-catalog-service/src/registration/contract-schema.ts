@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { CLASSIFICATIONS, DELIVERY_METHODS, FILE_FORMATS, VERSION_LIFECYCLE_STATUSES } from "../config/constants.js";
+import {
+  CLASSIFICATIONS,
+  DELIVERY_METHODS,
+  FILE_FORMATS,
+  MASKING_POLICIES,
+  PII_TYPES,
+  VERSION_LIFECYCLE_STATUSES,
+} from "../config/constants.js";
 
 // Normalized shape of a "kind: DataProduct" Contract-as-Code document (spec
 // §32). The CLI (scripts/validate-contract.ts / register-contract.ts) loads
@@ -15,6 +22,13 @@ export const schemaFieldSchema = z.object({
   classification: z.enum(CLASSIFICATIONS).optional(),
   description: z.string().optional(),
   customerVisible: z.boolean().default(true),
+  // Phase 11 field governance (spec §18/§19/§21) — platform metadata, not
+  // an automatic legal determination. registration.validator.ts requires
+  // piiType/maskingPolicy to be explicitly set (not left to any implicit
+  // default) whenever classification is RESTRICTED.
+  pii: z.boolean().default(false),
+  piiType: z.enum(PII_TYPES).optional(),
+  maskingPolicy: z.enum(MASKING_POLICIES).optional(),
 });
 
 // `api` (Phase 8, spec §8.2) is the Contract-driven query policy for the
@@ -88,6 +102,17 @@ export const contractDocumentSchema = z.object({
         defaultDeliveryMode: z.string().optional(),
       })
       .default({}),
+    // Phase 11 (spec §17/§18) — product/version-level governance metadata,
+    // populating the already-migrated but previously-unwired
+    // catalog.data_product_versions.{data_classification,retention_policy_ref,
+    // contains_pii,compliance_tags} columns (migrations/013_version_lifecycle_metadata.sql).
+    governance: z
+      .object({
+        dataClassification: z.enum(CLASSIFICATIONS).optional(),
+        retentionPolicyRef: z.string().min(1).optional(),
+        complianceTags: z.array(z.string().min(1)).default([]),
+      })
+      .default({ complianceTags: [] }),
   }),
 });
 

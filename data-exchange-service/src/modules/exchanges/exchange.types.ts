@@ -20,6 +20,7 @@ export interface ExchangeRow {
   idempotency_key: string | null;
   created_at: Date;
   updated_at: Date;
+  legal_hold: boolean;
 }
 
 export interface CreateExchangeInput {

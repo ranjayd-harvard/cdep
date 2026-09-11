@@ -70,6 +70,14 @@ services:
       # only pattern as SUBSCRIPTION_SERVICE_URL above. "host.docker.internal"
       # reaches scheduling-service's own host-published API port (8094).
       SCHEDULING_SERVICE_URL: "${SCHEDULING_SERVICE_URL:-}"
+      # data-platform-observability-service integration (Phase 9) — backs
+      # src/lib/observability-service/client.ts. Customer-safe (/v1/customer/*)
+      # calls need no key; the superadmin-only /admin/observability page's
+      # internal calls need OBSERVABILITY_SERVICE_INTERNAL_API_KEY. Same
+      # opt-in pattern as SCHEDULING_SERVICE_URL above. "host.docker.internal"
+      # reaches observability-service's own host-published API port (8097).
+      OBSERVABILITY_SERVICE_URL: "${OBSERVABILITY_SERVICE_URL:-}"
+      OBSERVABILITY_SERVICE_INTERNAL_API_KEY: "${OBSERVABILITY_SERVICE_INTERNAL_API_KEY:-}"
       # Needed because this container also runs in Docker: the signed
       # upload URL's hostname (data-exchange-service's own
       # OBJECT_STORAGE_PUBLIC_ENDPOINT, typically "localhost:9000") means

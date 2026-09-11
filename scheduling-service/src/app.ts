@@ -27,7 +27,23 @@ export async function buildApp(): Promise<FastifyInstance> {
     genReqId: () => randomUUID(),
   });
 
-  await app.register(cors, { origin: true });
+  // Phase 11 (spec §31/§33): an explicit allowlist, not `origin: true`
+  // (reflect-any-origin) — CORS_ALLOWED_ORIGINS is comma-separated.
+  const allowedOrigins = env.CORS_ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean);
+  await app.register(cors, { origin: allowedOrigins });
+
+  // Security headers (spec §33) — a conservative baseline appropriate for
+  // a JSON API with no rendered HTML: deny framing, disable content-type
+  // sniffing, minimize referrer leakage, and lock down an API surface that
+  // never needs powerful browser features.
+  app.addHook("onSend", async (_request, reply, payload) => {
+    reply.header("X-Content-Type-Options", "nosniff");
+    reply.header("X-Frame-Options", "DENY");
+    reply.header("Referrer-Policy", "no-referrer");
+    reply.header("Permissions-Policy", "geolocation=(), camera=(), microphone=()");
+    reply.header("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'");
+    return payload;
+  });
 
   await app.register(swagger, {
     openapi: {

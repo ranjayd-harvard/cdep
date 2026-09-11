@@ -15,6 +15,9 @@ export interface SchemaFieldRow {
   business_key: boolean;
   grain_key: boolean;
   customer_visible: boolean;
+  pii: boolean;
+  pii_type: string | null;
+  masking_policy: string | null;
 }
 
 export async function insertSchemaFields(
@@ -26,8 +29,8 @@ export async function insertSchemaFields(
     const field = fields[i]!;
     await client.query(
       `INSERT INTO catalog.product_schema_fields
-         (schema_field_id, data_product_version_id, ordinal, field_name, data_type, nullable, description, classification, business_key, grain_key, customer_visible)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+         (schema_field_id, data_product_version_id, ordinal, field_name, data_type, nullable, description, classification, business_key, grain_key, customer_visible, pii, pii_type, masking_policy)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
       [
         generateSchemaFieldId(),
         dataProductVersionId,
@@ -40,6 +43,9 @@ export async function insertSchemaFields(
         field.businessKey,
         field.grainKey,
         field.customerVisible,
+        field.pii,
+        field.piiType ?? null,
+        field.maskingPolicy ?? null,
       ],
     );
   }

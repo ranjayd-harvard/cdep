@@ -1,4 +1,5 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
+import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
 import { AppError } from "../common/errors/app-error.js";
 import { env } from "../config/env.js";
 import { ROLES, type Role } from "../config/constants.js";
@@ -61,16 +62,56 @@ function decodeDevToken(token: string): DevTokenPayload {
   }
 }
 
-function verifyProductionJwt(_token: string): SecurityContext {
-  // Real verification: fetch the tenant's OIDC issuer JWKS, verify
-  // signature + exp + aud/iss + required claims, map claims to
-  // SecurityContext exactly as toSecurityContext() does above. Left
-  // unimplemented on purpose, matching every other service in this
-  // monorepo — this phase only needs the trusted-claims contract to hold.
-  throw new AppError("SERVICE_UNAVAILABLE", "OIDC verification is not configured for this deployment.");
+const jwks = env.OIDC_JWKS_URI ? createRemoteJWKSet(new URL(env.OIDC_JWKS_URI)) : undefined;
+
+function rolesFromClaim(payload: JWTPayload): Role[] {
+  const claimed = (payload.realm_access as { roles?: unknown } | undefined)?.roles;
+  if (!Array.isArray(claimed)) return [];
+  return claimed.filter((r): r is Role => typeof r === "string" && isRole(r));
 }
 
-export function authenticate(request: FastifyRequest, _reply: FastifyReply): void {
+async function verifyProductionJwt(token: string): Promise<SecurityContext> {
+  if (!jwks || !env.OIDC_ISSUER_URL || !env.OIDC_AUDIENCE) {
+    throw new AppError("SERVICE_UNAVAILABLE", "OIDC verification is not configured for this deployment.");
+  }
+
+  let payload: JWTPayload;
+  try {
+    ({ payload } = await jwtVerify(token, jwks, {
+      issuer: env.OIDC_ISSUER_URL,
+      audience: env.OIDC_AUDIENCE,
+      algorithms: ["RS256"],
+    }));
+  } catch {
+    throw new AppError("INVALID_TOKEN", "Invalid or expired token.");
+  }
+
+  const organizationId = payload.organization_id;
+  const activeTenantId = payload.active_tenant_id;
+  const roles = rolesFromClaim(payload);
+
+  if (
+    typeof payload.sub !== "string" ||
+    typeof organizationId !== "string" ||
+    typeof activeTenantId !== "string" ||
+    roles.length === 0
+  ) {
+    throw new AppError("AUTHENTICATION_REQUIRED", "Token is missing required claims.");
+  }
+  if (organizationId.length > 64 || activeTenantId.length > 64) {
+    throw new AppError("INVALID_TOKEN", "Token's organization_id/active_tenant_id exceed the maximum length.");
+  }
+
+  return {
+    subjectId: payload.sub,
+    organizationId,
+    activeTenantId,
+    roles,
+    authenticationMethod: "OIDC",
+  };
+}
+
+export async function authenticate(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
   const header = request.headers.authorization;
 
   if (env.AUTH_MODE === "development") {
@@ -87,12 +128,12 @@ export function authenticate(request: FastifyRequest, _reply: FastifyReply): voi
     throw new AppError("AUTHENTICATION_REQUIRED", "Missing Authorization header.");
   }
   const token = header.replace(/^Bearer\s+/i, "");
-  request.securityContext = verifyProductionJwt(token);
+  request.securityContext = await verifyProductionJwt(token);
 }
 
 export function requireAuth() {
   return async (request: FastifyRequest, reply: FastifyReply) => {
-    authenticate(request, reply);
+    await authenticate(request, reply);
   };
 }
 

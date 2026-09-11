@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { AppError } from "../common/errors/app-error.js";
 import { env } from "../config/env.js";
 import { ROLES, type Role } from "../config/constants.js";
+import { recordSecurityAuditEvent } from "../audit/audit.repository.js";
 import type { RequestContext } from "./request-context.js";
 
 const DEFAULT_DEV_ACTOR: RequestContext = {
@@ -55,6 +56,17 @@ export function requireInternalAuth(minimumRole?: Role) {
     }
 
     if (minimumRole && request.requestContext.role !== minimumRole && request.requestContext.role !== "PLATFORM_ADMIN") {
+      await recordSecurityAuditEvent({
+        eventType: "ACCESS_DENIED",
+        actorType: request.requestContext.actorType,
+        actorId: request.requestContext.actorId,
+        resourceType: "route",
+        resourceId: request.routeOptions?.url ?? request.url,
+        decision: "DENY",
+        reasonCode: "ROLE_NOT_PERMITTED",
+        correlationId: request.correlationId ?? null,
+        metadata: { requiredRole: minimumRole, actualRole: request.requestContext.role },
+      });
       throw new AppError("FORBIDDEN", `This endpoint requires the ${minimumRole} role.`);
     }
   };

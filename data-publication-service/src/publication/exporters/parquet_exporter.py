@@ -35,10 +35,16 @@ class ParquetExporter:
         destination: Path,
         artifact_id: str,
         compression: str | None = "snappy",
+        product_version: str,
     ) -> ArtifactResult:
         compression = compression or "snappy"
+        # Phase 10 §44: embed the Data Product version as Parquet file-level
+        # key-value metadata, in addition to the sidecar manifest -- Parquet
+        # readers can recover it without needing the sidecar at all.
+        existing_metadata = table.schema.metadata or {}
+        versioned_table = table.replace_schema_metadata({**existing_metadata, b"data_product_version": product_version.encode("utf-8")})
         try:
-            pq.write_table(table, destination, compression=compression)
+            pq.write_table(versioned_table, destination, compression=compression)
         except Exception as exc:  # noqa: BLE001
             raise ExportError(f"Parquet export failed: {exc}") from exc
 
@@ -66,4 +72,5 @@ class ParquetExporter:
             checksum_algorithm="SHA-256",
             checksum=checksum,
             record_count=table.num_rows,
+            product_version=product_version,
         )

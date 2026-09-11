@@ -25,7 +25,9 @@ export const INBOUND_STATUSES = [
   "EXPIRED",
 ] as const;
 
-export const OUTBOUND_STATUSES = ["PREPARING", "READY", "DOWNLOADED", "EXPIRED", "FAILED"] as const;
+// DELETED (Phase 11 §24) is reached only via the deletion workflow
+// (deletion-request.service.ts), never a normal upload/download transition.
+export const OUTBOUND_STATUSES = ["PREPARING", "READY", "DOWNLOADED", "EXPIRED", "FAILED", "DELETED"] as const;
 
 export const EXCHANGE_STATUSES = [...INBOUND_STATUSES, ...OUTBOUND_STATUSES] as const;
 export type ExchangeStatus = (typeof EXCHANGE_STATUSES)[number];
@@ -69,6 +71,9 @@ export const OUTBOUND_TRANSITIONS: Record<string, readonly string[]> = {
   PREPARING: ["READY"],
   READY: ["DOWNLOADED"],
   DOWNLOADED: ["DOWNLOADED"],
+  // Phase 11 (spec §24) — retention/deletion only ever runs against an
+  // already-EXPIRED outbound exchange.
+  EXPIRED: ["DELETED"],
 };
 
 // Any non-terminal status in either direction may move to these.
@@ -81,6 +86,7 @@ export const TERMINAL_STATUSES = new Set([
   "CANCELLED",
   "EXPIRED",
   "DOWNLOADED",
+  "DELETED",
 ]);
 
 export const ID_PREFIXES = {
@@ -90,4 +96,34 @@ export const ID_PREFIXES = {
   validation: "val",
   correlation: "corr",
   pipelineJob: "pj",
+  deletionRequest: "del",
+  auditEvent: "aud",
 } as const;
+
+// Phase 11 (spec §24) — deletion workflow states.
+export const DELETION_REQUEST_STATUSES = [
+  "REQUESTED",
+  "APPROVED",
+  "IN_PROGRESS",
+  "BLOCKED",
+  "COMPLETED",
+  "FAILED",
+  "CANCELLED",
+] as const;
+export type DeletionRequestStatus = (typeof DELETION_REQUEST_STATUSES)[number];
+
+// Phase 11 (spec §29) — security/governance event vocabulary emitted by
+// this service.
+export const SECURITY_EVENT_TYPES = [
+  "ACCESS_ALLOWED",
+  "ACCESS_DENIED",
+  "CROSS_TENANT_ACCESS_BLOCKED",
+  "ENTITLEMENT_DENIED",
+  "SIGNED_URL_CREATED",
+  "RETENTION_EXECUTED",
+  "DELETION_REQUESTED",
+  "DELETION_COMPLETED",
+  "DELETION_BLOCKED",
+  "DELETION_FAILED",
+] as const;
+export type SecurityEventType = (typeof SECURITY_EVENT_TYPES)[number];

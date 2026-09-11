@@ -5,6 +5,7 @@ import { env } from "@/config/env";
 import { listCatalogProducts } from "@/lib/catalog-service/client";
 import { getEntitlementForProduct, listSubscriptions, type SubscriptionDTO } from "@/lib/subscription-service/client";
 import { getScheduleStatus, listExecutions, type ExecutionDTO, type ScheduleStatusDTO } from "@/lib/scheduling-service/client";
+import { getProductStatus, type ProductStatusDTO } from "@/lib/observability-service/client";
 import { Card, CardContent, EmptyState, PageHeader } from "@/components/ui";
 import { SubscriptionCard } from "./subscription-card";
 
@@ -66,6 +67,27 @@ export default async function SubscriptionsPage({
     );
   }
 
+  // Phase 9 — best-effort, same non-blocking pattern as the schedule
+  // panel above. Fetched for every catalog product (like entitlements
+  // above), not just already-subscribed ones — operational status is
+  // independent of subscription/entitlement state, so a tenant can see
+  // it before ever subscribing. observability-service being unset/
+  // unreachable, or no operational data yet for this product/tenant,
+  // just means the status badge doesn't render.
+  const statusByProduct = new Map<string, ProductStatusDTO>();
+  if (env.observabilityServiceEnabled) {
+    await Promise.all(
+      products.map(async (product) => {
+        try {
+          const status = await getProductStatus(tenant, product.dataProductId);
+          statusByProduct.set(product.dataProductId, status);
+        } catch {
+          // Not observed yet for this tenant/product, or the service is down.
+        }
+      }),
+    );
+  }
+
   const canManage = !isReadOnly(tenant.role);
 
   return (
@@ -95,6 +117,7 @@ export default async function SubscriptionsPage({
               subscription={subscriptionByProduct.get(product.dataProductId) ?? null}
               canManage={canManage}
               schedule={scheduleByProduct.get(product.dataProductId) ?? null}
+              productStatus={statusByProduct.get(product.dataProductId) ?? null}
             />
           ))}
         </div>

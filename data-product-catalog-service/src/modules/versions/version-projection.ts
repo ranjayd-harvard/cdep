@@ -52,12 +52,19 @@ export function toCustomerQuality(quality: QualityPolicyRow | null) {
   };
 }
 
+// Phase 10 §36: adds `compatibility` (=compatibility_type), `releasedAt`
+// (=activated_at), and `deprecationDeadline` (=grace_period_end, present
+// only when DEPRECATED — never a raw internal timestamp on an ACTIVE row).
 export function toCustomerVersionSummary(version: DataProductVersionRow) {
   return {
     version: version.version,
     lifecycleStatus: version.lifecycle_status,
+    compatibility: version.compatibility_type,
+    releasedAt: version.activated_at,
     effectiveFrom: version.effective_from,
     deprecatedAt: version.deprecated_at,
+    deprecationDeadline: version.lifecycle_status === "DEPRECATED" ? version.grace_period_end : null,
+    successorVersion: version.successor_version,
     retiredAt: version.retired_at,
   };
 }
@@ -74,6 +81,8 @@ export function toCustomerVersionDetail({ version, fields, delivery, sla, qualit
   return {
     version: version.version,
     lifecycleStatus: version.lifecycle_status,
+    compatibility: version.compatibility_type,
+    releasedAt: version.activated_at,
     description: version.description,
     grain: {
       description: version.grain_definition,
@@ -85,6 +94,8 @@ export function toCustomerVersionDetail({ version, fields, delivery, sla, qualit
     quality: toCustomerQuality(quality),
     effectiveFrom: version.effective_from,
     deprecatedAt: version.deprecated_at,
+    deprecationDeadline: version.lifecycle_status === "DEPRECATED" ? version.grace_period_end : null,
+    successorVersion: version.successor_version,
     retiredAt: version.retired_at,
   };
 }

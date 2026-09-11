@@ -1,12 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth } from "../../auth/customer-auth.middleware.js";
-import { getTenantContext } from "../../auth/authorization.js";
+import { getTenantContext, requirePermission } from "../../auth/authorization.js";
 import { AppError } from "../../common/errors/app-error.js";
 import { EXECUTION_STATUSES } from "../../config/constants.js";
 import { manualTriggerService, subscriptionClient } from "../../container.js";
 import { pool } from "../../database/pool.js";
-import { findExecutionById, listExecutions } from "../../infrastructure/persistence/execution.repository.js";
+import { findExecutionByIdForTenant, listExecutions } from "../../infrastructure/persistence/execution.repository.js";
 import { findProjectionBySubscriptionId } from "../../infrastructure/persistence/projection.repository.js";
 import { serializeExecution } from "../serializers.js";
 
@@ -28,7 +28,7 @@ const executionListQuerySchema = z.object({
 export async function customerSubscriptionScheduleRoutes(app: FastifyInstance): Promise<void> {
   app.get(
     "/v1/subscriptions/:subscriptionId/schedule-status",
-    { preHandler: [requireAuth()], schema: { tags: ["subscriptions", "scheduler"] } },
+    { preHandler: [requireAuth(), requirePermission("operations.read")], schema: { tags: ["subscriptions", "scheduler"] } },
     async (request, reply) => {
       const ctx = getTenantContext(request);
       const { subscriptionId } = request.params as { subscriptionId: string };
@@ -62,7 +62,7 @@ export async function customerSubscriptionScheduleRoutes(app: FastifyInstance): 
 
   app.get(
     "/v1/subscriptions/:subscriptionId/executions",
-    { preHandler: [requireAuth()], schema: { tags: ["subscriptions", "scheduler"] } },
+    { preHandler: [requireAuth(), requirePermission("operations.read")], schema: { tags: ["subscriptions", "scheduler"] } },
     async (request, reply) => {
       const ctx = getTenantContext(request);
       const { subscriptionId } = request.params as { subscriptionId: string };
@@ -82,18 +82,13 @@ export async function customerSubscriptionScheduleRoutes(app: FastifyInstance): 
 
   app.get(
     "/v1/subscriptions/:subscriptionId/executions/:executionId",
-    { preHandler: [requireAuth()], schema: { tags: ["subscriptions", "scheduler"] } },
+    { preHandler: [requireAuth(), requirePermission("operations.read")], schema: { tags: ["subscriptions", "scheduler"] } },
     async (request, reply) => {
       const ctx = getTenantContext(request);
       const { subscriptionId, executionId } = request.params as { subscriptionId: string; executionId: string };
 
-      const execution = await findExecutionById(pool, executionId);
-      if (
-        !execution ||
-        execution.subscriptionId !== subscriptionId ||
-        execution.organizationId !== ctx.organizationId ||
-        execution.tenantId !== ctx.activeTenantId
-      ) {
+      const execution = await findExecutionByIdForTenant(pool, ctx.organizationId, ctx.activeTenantId, executionId);
+      if (!execution || execution.subscriptionId !== subscriptionId) {
         throw new AppError("EXECUTION_NOT_FOUND", `Execution '${executionId}' was not found.`);
       }
       reply.code(200).send(serializeExecution(execution));
@@ -107,7 +102,7 @@ export async function customerSubscriptionScheduleRoutes(app: FastifyInstance): 
   // nonexistent one.
   app.post(
     "/v1/subscriptions/:subscriptionId/publications",
-    { preHandler: [requireAuth()], schema: { tags: ["subscriptions", "scheduler"] } },
+    { preHandler: [requireAuth(), requirePermission("publication.trigger")], schema: { tags: ["subscriptions", "scheduler"] } },
     async (request, reply) => {
       const ctx = getTenantContext(request);
       const { subscriptionId } = request.params as { subscriptionId: string };

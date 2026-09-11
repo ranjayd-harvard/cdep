@@ -121,7 +121,11 @@ export interface SubscriptionDTO {
   tenant_id: string;
   data_product_id: string;
   status: "PENDING" | "ACTIVE" | "PAUSED" | "SUSPENDED" | "CANCELLED";
-  version_policy: { type: "EXACT" | "COMPATIBLE_MAJOR" | "LATEST_ACTIVE"; value: string | null };
+  // Phase 10: COMPATIBLE_MAJOR renamed to COMPATIBLE_MINOR (identical "1.x"
+  // semantics); COMPATIBLE_PATCH and PINNED_MAJOR added.
+  version_policy: { type: "EXACT" | "COMPATIBLE_PATCH" | "COMPATIBLE_MINOR" | "PINNED_MAJOR" | "LATEST_ACTIVE"; value: string | null };
+  minor_upgrade_behavior?: "AUTO_UPGRADE_MINOR" | "PIN_CURRENT" | "MANUAL_APPROVAL";
+  last_resolved_version?: string | null;
   delivery: SubscriptionDeliveryDTO;
   requested_at: string;
   activated_at: string | null;

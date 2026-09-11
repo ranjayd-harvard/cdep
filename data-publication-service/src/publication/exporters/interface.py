@@ -18,4 +18,5 @@ class ArtifactExporter(Protocol):
         destination: Path,
         artifact_id: str,
         compression: str | None,
+        product_version: str,
     ) -> ArtifactResult: ...

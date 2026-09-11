@@ -100,6 +100,13 @@ services:
       PUBLICATION_EXCHANGE_SERVICE_API_KEY: dev-internal-key-change-me
       PUBLICATION_EXCHANGE_STORAGE_RELAY_HOST: host.docker.internal:9000
 
+      # Phase 11 (spec §9/§21) -- entitlement re-validated fresh before
+      # every publish, against subscription-service's own host-published
+      # port (8093). Left unset, publish() fails closed (DENY) rather than
+      # silently skipping the check -- see entitlement/client.py.
+      PUBLICATION_SUBSCRIPTION_SERVICE_BASE_URL: http://host.docker.internal:8093
+      PUBLICATION_SUBSCRIPTION_SERVICE_API_KEY: dev-internal-key-change-me
+
       PUBLICATION_WORK_DIR: /app/publication-work
       PUBLICATION_CONTRACTS_DIR: /app/contracts/products
 

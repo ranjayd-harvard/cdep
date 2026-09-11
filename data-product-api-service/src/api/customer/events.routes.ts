@@ -1,9 +1,16 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { requireAuth, getSecurityContext } from "../../auth/customer-auth.middleware.js";
+import { requirePermission } from "../../auth/authorization.js";
 import { AppError } from "../../common/errors/app-error.js";
 import { computeEtag } from "../../domain/etag.js";
 import { filterFingerprint } from "../../domain/cursor.js";
-import { RESOURCE, runEventPerformanceQuery, type EventPerformanceQueryDeps } from "../../application/services/event-performance-query.service.js";
+import {
+  RESOURCE,
+  runEventPerformanceQuery,
+  runEventPerformanceQueryForExplicitVersion,
+  type EventPerformanceQueryDeps,
+  type EventPerformanceQueryResult,
+} from "../../application/services/event-performance-query.service.js";
 import type { RateLimiter } from "../../ports/rate-limiter.port.js";
 import { logger } from "../../common/logger/logger.js";
 
@@ -35,7 +42,7 @@ export function eventPerformanceRoutes(deps: EventPerformanceQueryDeps, rateLimi
     app.get(
       "/v1/data-products/event-performance/events",
       {
-        preHandler: [requireAuth()],
+        preHandler: [requireAuth(), requirePermission("product.read")],
         schema: {
           tags: ["data-products"],
           summary: "Query the event-performance Data Product's events resource (spec §8.2). Version is resolved per-subscription, never hard-coded.",
@@ -97,64 +104,99 @@ export function eventPerformanceRoutes(deps: EventPerformanceQueryDeps, rateLimi
           },
         },
       },
-      async (request, reply) => {
-        const startedAt = Date.now();
-        const securityContext = getSecurityContext(request);
+      (request, reply) => handleQuery(request, reply, "/v1/data-products/event-performance/events", (securityContext, rawQuery) =>
+        runEventPerformanceQuery(deps, securityContext, RESOURCE, rawQuery),
+      ),
+    );
 
-        const rateLimitKey = `${securityContext.organizationId}:${securityContext.activeTenantId}:event-performance:events`;
-        const { allowed } = await rateLimiter.checkAndConsume(rateLimitKey);
-        if (!allowed) {
-          throw new AppError("RATE_LIMIT_EXCEEDED", "Too many requests. Please slow down.");
-        }
-
-        const result = await withTimeout(
-          runEventPerformanceQuery(deps, securityContext, RESOURCE, request.query as Record<string, unknown>),
-          REQUEST_TIMEOUT_MS,
+    // Phase 10 §38: explicit-version access. `/v1` (this file's route
+    // prefix) is the API platform version; `:version` here is the Data
+    // Product version — kept syntactically and semantically separate,
+    // never derived from one another. Resolves via Catalog's shared
+    // resolver (EXACT/DELIVER) instead of the subscription's stored
+    // floating policy, so an existing subscriber can read a DEPRECATED
+    // version mid-grace-period, or an opted-in tenant can read a BETA
+    // version, explicitly — while still requiring the same entitlement +
+    // active-API-subscription check as the default route.
+    app.get(
+      "/v1/data-products/event-performance/versions/:version/events",
+      {
+        preHandler: [requireAuth(), requirePermission("product.read")],
+        schema: {
+          tags: ["data-products"],
+          summary: "Query event-performance at an explicit Data Product version (spec §38), bypassing the subscription's floating policy resolution.",
+          security: [{ bearerAuth: [] }],
+          params: { type: "object", properties: { version: { type: "string" } }, required: ["version"] },
+          querystring: { type: "object", additionalProperties: true },
+        },
+      },
+      (request, reply) => {
+        const { version } = request.params as { version: string };
+        return handleQuery(request, reply, `/v1/data-products/event-performance/versions/${version}/events`, (securityContext, rawQuery) =>
+          runEventPerformanceQueryForExplicitVersion(deps, securityContext, RESOURCE, version, rawQuery),
         );
-
-        const etag = computeEtag({
-          organizationId: securityContext.organizationId,
-          tenantId: securityContext.activeTenantId,
-          productId: result.product.id,
-          version: result.product.version,
-          resource: "events",
-          queryFingerprint: filterFingerprint(request.query as Record<string, string | undefined>),
-          servingSnapshot: result.freshness.servingSnapshot,
-          fields: typeof (request.query as Record<string, unknown>)["fields"] === "string" ? (request.query as { fields: string }).fields.split(",") : null,
-          cursor: typeof (request.query as Record<string, unknown>)["cursor"] === "string" ? (request.query as { cursor: string }).cursor : null,
-        });
-
-        reply.header("ETag", etag);
-        if (request.headers["if-none-match"] === etag) {
-          reply.code(304).send();
-          return;
-        }
-
-        logger.info(
-          {
-            request_id: request.correlationId,
-            tenant_id: securityContext.activeTenantId,
-            data_product_id: result.product.id,
-            resolved_product_version: result.product.version,
-            api_version: "v1",
-            endpoint: "/v1/data-products/event-performance/events",
-            result_count: result.data.length,
-            status: 200,
-            serving_snapshot: result.freshness.servingSnapshot,
-            latency_ms: Date.now() - startedAt,
-            response_bytes: result.responseBytes,
-          },
-          "DATA_PRODUCT_API_QUERY",
-        );
-
-        reply.code(200).send({
-          data: result.data,
-          page: { next_cursor: result.page.nextCursor, page_size: result.page.pageSize },
-          product: { id: result.product.id, version: result.product.version },
-          freshness: { serving_snapshot: result.freshness.servingSnapshot, as_of: result.freshness.asOf },
-          request_id: request.correlationId,
-        });
       },
     );
+
+    async function handleQuery(
+      request: FastifyRequest,
+      reply: FastifyReply,
+      endpointLabel: string,
+      run: (securityContext: ReturnType<typeof getSecurityContext>, rawQuery: Record<string, unknown>) => Promise<EventPerformanceQueryResult>,
+    ): Promise<void> {
+      const startedAt = Date.now();
+      const securityContext = getSecurityContext(request);
+
+      const rateLimitKey = `${securityContext.organizationId}:${securityContext.activeTenantId}:event-performance:events`;
+      const { allowed } = await rateLimiter.checkAndConsume(rateLimitKey);
+      if (!allowed) {
+        throw new AppError("RATE_LIMIT_EXCEEDED", "Too many requests. Please slow down.");
+      }
+
+      const result = await withTimeout(run(securityContext, request.query as Record<string, unknown>), REQUEST_TIMEOUT_MS);
+
+      const etag = computeEtag({
+        organizationId: securityContext.organizationId,
+        tenantId: securityContext.activeTenantId,
+        productId: result.product.id,
+        version: result.product.version,
+        resource: "events",
+        queryFingerprint: filterFingerprint(request.query as Record<string, string | undefined>),
+        fields: typeof (request.query as Record<string, unknown>)["fields"] === "string" ? (request.query as { fields: string }).fields.split(",") : null,
+        cursor: typeof (request.query as Record<string, unknown>)["cursor"] === "string" ? (request.query as { cursor: string }).cursor : null,
+        servingSnapshot: result.freshness.servingSnapshot,
+      });
+
+      reply.header("ETag", etag);
+      if (request.headers["if-none-match"] === etag) {
+        reply.code(304).send();
+        return;
+      }
+
+      logger.info(
+        {
+          request_id: request.correlationId,
+          tenant_id: securityContext.activeTenantId,
+          data_product_id: result.product.id,
+          resolved_product_version: result.product.version,
+          api_version: "v1",
+          endpoint: endpointLabel,
+          result_count: result.data.length,
+          status: 200,
+          serving_snapshot: result.freshness.servingSnapshot,
+          latency_ms: Date.now() - startedAt,
+          response_bytes: result.responseBytes,
+        },
+        "DATA_PRODUCT_API_QUERY",
+      );
+
+      reply.code(200).send({
+        data: result.data,
+        page: { next_cursor: result.page.nextCursor, page_size: result.page.pageSize },
+        product: { id: result.product.id, version: result.product.version },
+        freshness: { serving_snapshot: result.freshness.servingSnapshot, as_of: result.freshness.asOf },
+        request_id: request.correlationId,
+      });
+    }
   };
 }

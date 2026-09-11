@@ -56,4 +56,85 @@ describe("validateContractStructure", () => {
     doc.spec.sla.availabilityTargetPercent = 150;
     expect(() => validateContractStructure(doc)).toThrow(/availabilityTargetPercent/);
   });
+
+  // Phase 11 (spec §20) governance validation.
+  describe("RESTRICTED field governance", () => {
+    it("rejects a RESTRICTED field with no piiType", () => {
+      const doc = baseDoc({
+        schema: [
+          { name: "event_id", type: "string", required: true, grainKey: true },
+          { name: "customer_email", type: "string", classification: "RESTRICTED", maskingPolicy: "DENY" },
+        ],
+        governance: { retentionPolicyRef: "CUSTOMER_PII_90_DAYS" },
+      });
+      expect(() => validateContractStructure(doc)).toThrow(/piiType/);
+    });
+
+    it("rejects a RESTRICTED field with no maskingPolicy", () => {
+      const doc = baseDoc({
+        schema: [
+          { name: "event_id", type: "string", required: true, grainKey: true },
+          { name: "customer_email", type: "string", classification: "RESTRICTED", pii: true, piiType: "EMAIL" },
+        ],
+        governance: { retentionPolicyRef: "CUSTOMER_PII_90_DAYS" },
+      });
+      expect(() => validateContractStructure(doc)).toThrow(/maskingPolicy/);
+    });
+
+    it("rejects a RESTRICTED, customerVisible field with maskingPolicy ALLOW", () => {
+      const doc = baseDoc({
+        schema: [
+          { name: "event_id", type: "string", required: true, grainKey: true },
+          {
+            name: "customer_email",
+            type: "string",
+            classification: "RESTRICTED",
+            pii: true,
+            piiType: "EMAIL",
+            customerVisible: true,
+            maskingPolicy: "ALLOW",
+          },
+        ],
+        governance: { retentionPolicyRef: "CUSTOMER_PII_90_DAYS" },
+      });
+      expect(() => validateContractStructure(doc)).toThrow(/maskingPolicy: ALLOW/);
+    });
+
+    it("rejects a contract with a RESTRICTED field but no product-level retentionPolicyRef", () => {
+      const doc = baseDoc({
+        schema: [
+          { name: "event_id", type: "string", required: true, grainKey: true },
+          {
+            name: "customer_email",
+            type: "string",
+            classification: "RESTRICTED",
+            pii: true,
+            piiType: "EMAIL",
+            customerVisible: false,
+            maskingPolicy: "DENY",
+          },
+        ],
+      });
+      expect(() => validateContractStructure(doc)).toThrow(/retentionPolicyRef/);
+    });
+
+    it("accepts a fully-governed RESTRICTED field", () => {
+      const doc = baseDoc({
+        schema: [
+          { name: "event_id", type: "string", required: true, grainKey: true },
+          {
+            name: "customer_email",
+            type: "string",
+            classification: "RESTRICTED",
+            pii: true,
+            piiType: "EMAIL",
+            customerVisible: false,
+            maskingPolicy: "DENY",
+          },
+        ],
+        governance: { retentionPolicyRef: "CUSTOMER_PII_90_DAYS" },
+      });
+      expect(() => validateContractStructure(doc)).not.toThrow();
+    });
+  });
 });

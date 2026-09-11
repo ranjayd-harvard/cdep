@@ -14,11 +14,11 @@ describe("GET /internal/v1/versions/api-contract", () => {
   const ownerId = `test-owner-${suffix}`;
   const productId = `test-product-${suffix}`;
 
-  function contractFor(version: string, deliveryMethods: Array<Record<string, unknown>>) {
+  function contractFor(version: string, deliveryMethods: Array<Record<string, unknown>>, forProductId: string = productId) {
     return {
       apiVersion: "data-platform/v1",
       kind: "DataProduct",
-      metadata: { id: productId, name: "Test Product", version },
+      metadata: { id: forProductId, name: "Test Product", version },
       spec: {
         domain: { id: domainId },
         owner: { id: ownerId, displayName: "Test Owner" },
@@ -93,18 +93,36 @@ describe("GET /internal/v1/versions/api-contract", () => {
   });
 
   it("rejects a version with no API delivery method configured", async () => {
-    await app.inject({
+    // A fresh product (not a second version of `productId`) — removing the
+    // API delivery method from an *existing* version is itself a BREAKING
+    // change under Phase 10's delivery-method compatibility diff (spec
+    // §17), which is exercised separately below. This test is only about
+    // the api-contract read endpoint's behavior for a version that never
+    // had API delivery configured in the first place.
+    const noApiProductId = `${productId}-no-api`;
+    const register = await app.inject({
+      method: "POST",
+      url: "/internal/v1/contracts/register",
+      payload: { contract: contractFor("1.0.0", [{ type: "FILE", enabled: true, formats: ["PARQUET"] }], noApiProductId) },
+    });
+    expect(register.statusCode).toBe(201);
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/internal/v1/versions/api-contract?data_product_id=${noApiProductId}&version=1.0.0`,
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error.code).toBe("API_DELIVERY_NOT_CONFIGURED");
+  });
+
+  it("rejects removing a published delivery method without a major version bump", async () => {
+    const removeApi = await app.inject({
       method: "POST",
       url: "/internal/v1/contracts/register",
       payload: { contract: contractFor("1.1.0", [{ type: "FILE", enabled: true, formats: ["PARQUET"] }]) },
     });
-
-    const res = await app.inject({
-      method: "GET",
-      url: `/internal/v1/versions/api-contract?data_product_id=${productId}&version=1.1.0`,
-    });
-    expect(res.statusCode).toBe(422);
-    expect(res.json().error.code).toBe("API_DELIVERY_NOT_CONFIGURED");
+    expect(removeApi.statusCode).toBe(422);
+    expect(removeApi.json().error.code).toBe("BREAKING_CHANGE_REQUIRES_MAJOR_VERSION");
   });
 
   it("404s for an unknown product or version", async () => {

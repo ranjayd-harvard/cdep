@@ -35,11 +35,34 @@ def _merge_catalog_contract(local_data: dict, catalog_envelope: dict) -> dict:
     if grain_keys:
         merged["grain"] = grain_keys
 
+    # Phase 11 (spec §21/§41): a field is excluded from the published
+    # artifact entirely when the Catalog contract says so — either
+    # customerVisible: false, or maskingPolicy: DENY (DENY always means
+    # "never appears", regardless of customerVisible, since a field that's
+    # both RESTRICTED and DENY should not depend on the author remembering
+    # to also set customerVisible: false).
+    catalog_fields = [
+        f
+        for f in spec.get("schema", [])
+        if f.get("customerVisible", True) and f.get("maskingPolicy") != "DENY"
+    ]
     merged["publishedSchema"] = [
         {"name": f["name"], "source": f["name"], "type": f["type"], "required": bool(f.get("required"))}
-        for f in spec.get("schema", [])
-        if f.get("customerVisible", True)
+        for f in catalog_fields
     ]
+
+    # Column policy (spec §21): REDACT/MASK/HASH are enforced identically
+    # here (FILE delivery) and in data-product-api-service's
+    # response-projector.ts (API delivery) — both driven from the same
+    # Catalog field.maskingPolicy, never a per-contract hand-authored rule.
+    _POLICY_TO_STRATEGY = {"REDACT": "redact", "HASH": "hash", "MASK": "last4"}
+    catalog_masking = {
+        f["name"]: {"strategy": _POLICY_TO_STRATEGY[f["maskingPolicy"]]}
+        for f in catalog_fields
+        if f.get("maskingPolicy") in _POLICY_TO_STRATEGY
+    }
+    if catalog_masking:
+        merged["masking"] = {**local_data.get("masking", {}), **catalog_masking}
 
     for method in spec.get("delivery", {}).get("methods", []):
         if method.get("type") == "FILE" and method.get("enabled") and method.get("formats"):
