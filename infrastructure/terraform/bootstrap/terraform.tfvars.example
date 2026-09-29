@@ -1,0 +1,22 @@
+# Copy to terraform.tfvars and fill in real, account-specific values.
+# terraform.tfvars is gitignored — never commit it.
+
+project_name = "dpp"
+environment  = "shared" # or "dev" / "staging" / "production" if each gets its own state bucket
+
+aws_region = "us-east-1"
+
+# Must be globally unique across ALL of S3, not just your account.
+# A common convention is "<project>-tfstate-<account-id>".
+state_bucket_name = "dpp-tfstate-123456789012"
+
+enable_kms_encryption = true
+
+# Optional: ARNs of additional roles/users (e.g. a CI/CD deploy role) that
+# need read/write access to the state bucket beyond the account's own
+# administrative access.
+additional_state_reader_arns = []
+
+tags = {
+  Owner = "platform-team"
+}

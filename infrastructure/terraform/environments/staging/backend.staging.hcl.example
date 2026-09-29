@@ -1,0 +1,9 @@
+# Copy to backend.staging.hcl (gitignored) and fill in real values.
+#   cp backend.staging.hcl.example backend.staging.hcl
+#   terraform init -backend-config=backend.staging.hcl
+
+bucket       = "<terraform-state-bucket>"
+key          = "data-product-platform/staging/terraform.tfstate"
+region       = "<aws-region>"
+encrypt      = true
+use_lockfile = true

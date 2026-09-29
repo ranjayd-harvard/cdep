@@ -1,0 +1,13 @@
+# Copy to backend.production.hcl (gitignored) and fill in real values.
+# Strongly consider a SEPARATE AWS account (and therefore a separate state
+# bucket) for production rather than sharing dev/staging's — see
+# docs/aws/account-strategy.md.
+#
+#   cp backend.production.hcl.example backend.production.hcl
+#   terraform init -backend-config=backend.production.hcl
+
+bucket       = "<terraform-state-bucket>"
+key          = "data-product-platform/production/terraform.tfstate"
+region       = "<aws-region>"
+encrypt      = true
+use_lockfile = true

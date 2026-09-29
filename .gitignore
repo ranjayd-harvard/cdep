@@ -39,3 +39,16 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# terraform (infrastructure/terraform) — see infrastructure/terraform/README.md
+# .terraform.lock.hcl is INTENTIONALLY NOT ignored — it is committed, per
+# infrastructure/terraform/README.md and Phase 12 §6.
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+infrastructure/terraform/**/terraform.tfvars
+infrastructure/terraform/**/backend.*.hcl
+!infrastructure/terraform/**/backend.*.hcl.example

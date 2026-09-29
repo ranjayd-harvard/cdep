@@ -1,0 +1,72 @@
+# Copy to terraform.tfvars (gitignored) and fill in real values before
+# `terraform plan`. Everything here is a dev-cost-conscious default — see
+# environments/staging and environments/production for how these differ.
+
+project_name   = "dpp"
+environment    = "dev"
+aws_region     = "us-east-1"
+aws_account_id = "123456789012" # only used for tagging/ARN construction in this stack, never for auth
+
+vpc_cidr = "10.10.0.0/16"
+availability_zones = [
+  "us-east-1a",
+  "us-east-1b",
+]
+public_subnet_cidrs       = ["10.10.0.0/24", "10.10.1.0/24"]
+private_app_subnet_cidrs  = ["10.10.10.0/24", "10.10.11.0/24"]
+private_data_subnet_cidrs = ["10.10.20.0/24", "10.10.21.0/24"]
+
+enable_nat_gateway = true
+single_nat_gateway = true # one shared NAT — cheaper, acceptable single point of failure in dev
+
+# --- Domain / TLS ---------------------------------------------------------
+# Leave both null/false for a first deploy with no domain yet, but supply
+# acm_certificate_arn_override with a pre-validated ACM certificate ARN —
+# the ALB always terminates TLS. See docs/aws/pre-deployment-checklist.md.
+domain_name                 = null
+enable_route53_records      = false
+create_route53_hosted_zone  = false
+route53_hosted_zone_id      = null
+acm_certificate_arn_override = "arn:aws:acm:us-east-1:123456789012:certificate/REPLACE-ME"
+
+# --- Feature flags (cost-conscious dev defaults) --------------------------
+enable_waf        = false
+enable_cloudfront = false
+enable_emr        = false
+
+# --- Sizing ----------------------------------------------------------------
+ecs_cpu                    = 256
+ecs_memory                 = 512
+ecs_public_desired_count   = 1
+ecs_internal_desired_count = 1
+ecs_max_capacity           = 2
+
+rds_instance_class        = "db.t4g.micro"
+rds_allocated_storage      = 20
+rds_multi_az               = false
+rds_deletion_protection    = false
+rds_skip_final_snapshot    = true
+rds_backup_retention_days  = 3
+
+retention_days = 14
+
+# --- Container images -------------------------------------------------------
+# Phase 12 pushes no images — every service defaults to a placeholder that
+# will fail health checks until replaced. Fill these in during
+# docs/aws/new-account-deployment.md Part H/I.
+container_images = {
+  "customer-portal"            = "<account-id>.dkr.ecr.us-east-1.amazonaws.com/dpp-dev-customer-portal:REPLACE-ME"
+  "exchange-service"           = "<account-id>.dkr.ecr.us-east-1.amazonaws.com/dpp-dev-exchange-service:REPLACE-ME"
+  "lakehouse-service"          = "<account-id>.dkr.ecr.us-east-1.amazonaws.com/dpp-dev-lakehouse-service:REPLACE-ME"
+  "catalog-service"            = "<account-id>.dkr.ecr.us-east-1.amazonaws.com/dpp-dev-catalog-service:REPLACE-ME"
+  "subscription-service"       = "<account-id>.dkr.ecr.us-east-1.amazonaws.com/dpp-dev-subscription-service:REPLACE-ME"
+  "scheduler-service"          = "<account-id>.dkr.ecr.us-east-1.amazonaws.com/dpp-dev-scheduler-service:REPLACE-ME"
+  "publication-service"        = "<account-id>.dkr.ecr.us-east-1.amazonaws.com/dpp-dev-publication-service:REPLACE-ME"
+  "product-api-service"        = "<account-id>.dkr.ecr.us-east-1.amazonaws.com/dpp-dev-product-api-service:REPLACE-ME"
+  "observability-service"      = "<account-id>.dkr.ecr.us-east-1.amazonaws.com/dpp-dev-observability-service:REPLACE-ME"
+  "serving-projection-service" = "<account-id>.dkr.ecr.us-east-1.amazonaws.com/dpp-dev-serving-projection-service:REPLACE-ME"
+}
+
+tags = {
+  Owner = "platform-team"
+}

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireSuperuserContext } from "@/lib/admin";
 import { services } from "@/services";
 import {
+  assignPortalUserToOrganization,
   findPortalUserById,
   setPortalUserRole,
   setPortalUserStatus,
@@ -11,7 +12,7 @@ import {
 } from "@/lib/user-directory";
 import { createAuthToken } from "@/lib/auth-tokens";
 import { sendAccountValidatedEmail } from "@/lib/auth-emails";
-import { PortalUserStatus, type Tenant, type UserRole } from "@/models";
+import { PortalUserStatus, UserRole, type Tenant } from "@/models";
 
 const VALIDATION_TOKEN_TTL_MS = 60 * 60 * 1000;
 
@@ -49,9 +50,36 @@ export async function setMemberStatus(organizationId: string, userId: string, st
   revalidatePath(`/admin/organizations/${organizationId}`);
 }
 
+/**
+ * Approves a pending request to join this organization: assigns the
+ * requester to the org's default tenant as CUSTOMER_USER (an admin can
+ * change their role afterward from this same page), mirroring
+ * `../../../(portal)/settings/membership-actions.ts`'s self-service
+ * version. The requester's own session picks this up on their next page
+ * load via the `jwt` callback's lazy-refresh branch in `src/auth.ts`.
+ */
 export async function approveMembershipRequest(organizationId: string, requestId: string): Promise<void> {
   const admin = await requireSuperuserContext();
+
+  const pending = await services.organizationMemberships.listPendingRequests(organizationId);
+  const request = pending.find((item) => item.id === requestId);
+  if (!request) {
+    // Already resolved, or belongs to a different org — nothing to do.
+    return;
+  }
+
+  const defaultTenant = await services.tenants.getDefaultTenant(organizationId);
+  if (!defaultTenant) {
+    throw new Error(`Organization "${organizationId}" has no default tenant.`);
+  }
+
+  await assignPortalUserToOrganization(request.userId, {
+    organizationId,
+    tenantId: defaultTenant.id,
+    role: UserRole.CUSTOMER_USER,
+  });
   await services.organizationMemberships.approveRequest(requestId, admin.userId);
+
   revalidatePath(`/admin/organizations/${organizationId}`);
 }
 

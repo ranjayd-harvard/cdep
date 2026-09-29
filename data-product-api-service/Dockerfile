@@ -28,6 +28,6 @@ USER dataproductapi
 EXPOSE 8095
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- http://localhost:8095/health/live || exit 1
+  CMD wget -qO- http://127.0.0.1:8095/health/live || exit 1
 
 CMD ["node", "dist/scripts/start.js"]

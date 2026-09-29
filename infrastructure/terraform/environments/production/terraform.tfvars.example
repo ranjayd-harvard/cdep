@@ -1,0 +1,66 @@
+# Copy to terraform.tfvars (gitignored) and fill in real values.
+# Strongly consider deploying production into its own dedicated AWS account
+# rather than sharing one with dev/staging — see docs/aws/account-strategy.md.
+
+project_name   = "dpp"
+environment    = "production"
+aws_region     = "us-east-1"
+aws_account_id = "999999999999"
+
+vpc_cidr = "10.30.0.0/16"
+availability_zones = [
+  "us-east-1a",
+  "us-east-1b",
+  "us-east-1c",
+]
+public_subnet_cidrs       = ["10.30.0.0/24", "10.30.1.0/24", "10.30.2.0/24"]
+private_app_subnet_cidrs  = ["10.30.10.0/24", "10.30.11.0/24", "10.30.12.0/24"]
+private_data_subnet_cidrs = ["10.30.20.0/24", "10.30.21.0/24", "10.30.22.0/24"]
+
+enable_nat_gateway = true
+single_nat_gateway = false # one NAT gateway per AZ — no single point of failure
+
+domain_name                  = "dataproducts.example.com"
+enable_route53_records       = true
+create_route53_hosted_zone   = true # production owns the root hosted zone
+route53_hosted_zone_id       = null
+acm_certificate_arn_override = null
+
+enable_waf        = true
+enable_cloudfront = true
+enable_emr        = true
+
+ecs_cpu                    = 1024
+ecs_memory                 = 2048
+ecs_public_desired_count   = 3
+ecs_internal_desired_count = 2
+ecs_max_capacity           = 10
+
+rds_instance_class       = "db.r6g.large"
+rds_allocated_storage     = 100
+rds_multi_az              = true
+rds_deletion_protection   = true
+rds_skip_final_snapshot   = false
+rds_backup_retention_days = 30
+
+retention_days = 90
+
+enable_vault_lock = true
+
+container_images = {
+  "customer-portal"            = "<account-id>.dkr.ecr.us-east-1.amazonaws.com/dpp-production-customer-portal:REPLACE-ME"
+  "exchange-service"           = "<account-id>.dkr.ecr.us-east-1.amazonaws.com/dpp-production-exchange-service:REPLACE-ME"
+  "lakehouse-service"          = "<account-id>.dkr.ecr.us-east-1.amazonaws.com/dpp-production-lakehouse-service:REPLACE-ME"
+  "catalog-service"            = "<account-id>.dkr.ecr.us-east-1.amazonaws.com/dpp-production-catalog-service:REPLACE-ME"
+  "subscription-service"       = "<account-id>.dkr.ecr.us-east-1.amazonaws.com/dpp-production-subscription-service:REPLACE-ME"
+  "scheduler-service"          = "<account-id>.dkr.ecr.us-east-1.amazonaws.com/dpp-production-scheduler-service:REPLACE-ME"
+  "publication-service"        = "<account-id>.dkr.ecr.us-east-1.amazonaws.com/dpp-production-publication-service:REPLACE-ME"
+  "product-api-service"        = "<account-id>.dkr.ecr.us-east-1.amazonaws.com/dpp-production-product-api-service:REPLACE-ME"
+  "observability-service"      = "<account-id>.dkr.ecr.us-east-1.amazonaws.com/dpp-production-observability-service:REPLACE-ME"
+  "serving-projection-service" = "<account-id>.dkr.ecr.us-east-1.amazonaws.com/dpp-production-serving-projection-service:REPLACE-ME"
+}
+
+tags = {
+  Owner      = "platform-team"
+  CostCenter = "REPLACE-ME"
+}

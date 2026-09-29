@@ -1,0 +1,11 @@
+# Copy to backend.dev.hcl (gitignored) and fill in real values from the
+# bootstrap stack's outputs (`terraform output` in infrastructure/terraform/bootstrap).
+#
+#   cp backend.dev.hcl.example backend.dev.hcl
+#   terraform init -backend-config=backend.dev.hcl
+
+bucket       = "<terraform-state-bucket>"
+key          = "data-product-platform/dev/terraform.tfstate"
+region       = "<aws-region>"
+encrypt      = true
+use_lockfile = true
